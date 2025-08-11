@@ -1,0 +1,40 @@
+2025-08-06 12:45:55,367 - DEBUG - This is a detailed debug message. Good for tracking a variable's value.
+2025-08-06 12:45:55,367 - INFO - The script is starting to do some work now.
+2025-08-06 12:45:55,367 - WARNING - The 'discount_rate' setting was not found. Using default value of 10%.
+2025-08-06 12:45:55,367 - ERROR - Failed to connect to the database. Cannot proceed with this task.
+2025-08-06 12:45:55,367 - CRITICAL - Catastrophic failure! Out of memory.
+2025-08-06 12:46:11,787 - DEBUG - This is a detailed debug message. Good for tracking a variable's value.
+2025-08-06 12:46:11,787 - INFO - The script is starting to do some work now.
+2025-08-06 12:46:11,787 - WARNING - The 'discount_rate' setting was not found. Using default value of 10%.
+2025-08-06 12:46:11,788 - ERROR - Failed to connect to the database. Cannot proceed with this task.
+2025-08-06 12:46:11,788 - CRITICAL - Catastrophic failure! Out of memory.
+2025-08-06 12:46:14,929 - DEBUG - This is a detailed debug message. Good for tracking a variable's value.
+2025-08-06 12:46:14,929 - INFO - The script is starting to do some work now.
+2025-08-06 12:46:14,929 - WARNING - The 'discount_rate' setting was not found. Using default value of 10%.
+2025-08-06 12:46:14,929 - ERROR - Failed to connect to the database. Cannot proceed with this task.
+2025-08-06 12:46:14,929 - CRITICAL - Catastrophic failure! Out of memory.
+2025-08-07 09:46:34,219 - DEBUG - This is a detailed debug message. Good for tracking a variable's value.
+2025-08-07 09:46:34,219 - INFO - The script is starting to do some work now.
+2025-08-07 09:46:34,219 - WARNING - The 'discount_rate' setting was not found. Using default value of 10%.
+2025-08-07 09:46:34,219 - ERROR - Failed to connect to the database. Cannot proceed with this task.
+2025-08-07 09:46:34,219 - CRITICAL - Catastrophic failure! Out of memory.
+2025-08-07 09:46:35,113 - DEBUG - This is a detailed debug message. Good for tracking a variable's value.
+2025-08-07 09:46:35,113 - INFO - The script is starting to do some work now.
+2025-08-07 09:46:35,113 - WARNING - The 'discount_rate' setting was not found. Using default value of 10%.
+2025-08-07 09:46:35,113 - ERROR - Failed to connect to the database. Cannot proceed with this task.
+2025-08-07 09:46:35,113 - CRITICAL - Catastrophic failure! Out of memory.
+2025-08-07 09:46:35,812 - DEBUG - This is a detailed debug message. Good for tracking a variable's value.
+2025-08-07 09:46:35,812 - INFO - The script is starting to do some work now.
+2025-08-07 09:46:35,812 - WARNING - The 'discount_rate' setting was not found. Using default value of 10%.
+2025-08-07 09:46:35,812 - ERROR - Failed to connect to the database. Cannot proceed with this task.
+2025-08-07 09:46:35,812 - CRITICAL - Catastrophic failure! Out of memory.
+2025-08-07 09:46:36,379 - DEBUG - This is a detailed debug message. Good for tracking a variable's value.
+2025-08-07 09:46:36,379 - INFO - The script is starting to do some work now.
+2025-08-07 09:46:36,380 - WARNING - The 'discount_rate' setting was not found. Using default value of 10%.
+2025-08-07 09:46:36,380 - ERROR - Failed to connect to the database. Cannot proceed with this task.
+2025-08-07 09:46:36,380 - CRITICAL - Catastrophic failure! Out of memory.
+2025-08-07 09:46:46,950 - DEBUG - This is a detailed debug message. Good for tracking a variable's value.
+2025-08-07 09:46:46,951 - INFO - The script is starting to do some work now.
+2025-08-07 09:46:46,951 - WARNING - The 'discount_rate' setting was not found. Using default value of 10%.
+2025-08-07 09:46:46,951 - ERROR - Failed to connect to the database. Cannot proceed with this task.
+2025-08-07 09:46:46,951 - CRITICAL - Catastrophic failure! Out of memory.
