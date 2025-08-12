@@ -1,0 +1,501 @@
+product_id,product_name,category,price
+PROD1000,High,Snacks,553.33
+PROD1001,Business,Beverages,718.04
+PROD1002,Along,Household,606.74
+PROD1003,Organization,Personal Care,549.43
+PROD1004,Risk,Electronics,429.42
+PROD1005,Exactly,Personal Care,649.44
+PROD1006,Same,Beverages,443.21
+PROD1007,Need,Beverages,892.86
+PROD1008,Minute,Personal Care,964.03
+PROD1009,Admit,Beverages,389.61
+PROD1010,Watch,Snacks,793.81
+PROD1011,Without,Snacks,533.61
+PROD1012,Nothing,Electronics,572.36
+PROD1013,Own,Personal Care,926.34
+PROD1014,Agent,Snacks,80.33
+PROD1015,Use,Beverages,96.26
+PROD1016,Wife,Electronics,30.02
+PROD1017,Treatment,Household,834.29
+PROD1018,Between,Beverages,780.38
+PROD1019,Whether,Electronics,871.31
+PROD1020,Couple,Snacks,978.83
+PROD1021,Understand,Household,801.17
+PROD1022,Even,Household,466.86
+PROD1023,Beautiful,Snacks,782.72
+PROD1024,Population,Beverages,127.09
+PROD1025,Father,Beverages,643.52
+PROD1026,Factor,Personal Care,151.92
+PROD1027,Risk,Snacks,945.22
+PROD1028,And,Beverages,526.63
+PROD1029,Serve,Snacks,420.52
+PROD1030,Enough,Personal Care,271.91
+PROD1031,Pm,Personal Care,776.49
+PROD1032,Week,Beverages,461.59
+PROD1033,Support,Beverages,572.75
+PROD1034,Tv,Personal Care,28.6
+PROD1035,Network,Household,621.46
+PROD1036,Often,Snacks,615.97
+PROD1037,Series,Beverages,620.76
+PROD1038,Necessary,Electronics,944.31
+PROD1039,Ten,Beverages,685.0
+PROD1040,Place,Electronics,365.91
+PROD1041,Body,Electronics,442.66
+PROD1042,American,Household,700.65
+PROD1043,Learn,Beverages,69.62
+PROD1044,Sort,Personal Care,670.1
+PROD1045,Act,Personal Care,673.93
+PROD1046,Seat,Household,218.28
+PROD1047,Imagine,Snacks,137.64
+PROD1048,Turn,Electronics,322.27
+PROD1049,Name,Personal Care,370.07
+PROD1050,Low,Household,574.49
+PROD1051,Whose,Beverages,444.22
+PROD1052,Oil,Personal Care,988.49
+PROD1053,Simple,Beverages,111.02
+PROD1054,Car,Personal Care,216.79
+PROD1055,While,Electronics,169.7
+PROD1056,Morning,Electronics,656.58
+PROD1057,But,Electronics,260.76
+PROD1058,Until,Electronics,471.65
+PROD1059,Production,Beverages,251.98
+PROD1060,Relationship,Beverages,167.38
+PROD1061,Can,Beverages,119.27
+PROD1062,Provide,Snacks,659.77
+PROD1063,Among,Household,146.8
+PROD1064,Decision,Snacks,204.62
+PROD1065,Whom,Beverages,375.04
+PROD1066,Police,Household,822.78
+PROD1067,Huge,Beverages,106.13
+PROD1068,Property,Snacks,839.57
+PROD1069,Blood,Personal Care,105.14
+PROD1070,Especially,Electronics,976.69
+PROD1071,Project,Snacks,473.96
+PROD1072,Scene,Household,976.99
+PROD1073,Present,Electronics,608.8
+PROD1074,Section,Household,741.87
+PROD1075,Our,Personal Care,48.8
+PROD1076,Exactly,Personal Care,289.98
+PROD1077,Task,Electronics,128.99
+PROD1078,Several,Household,303.18
+PROD1079,Candidate,Beverages,127.54
+PROD1080,People,Beverages,324.8
+PROD1081,Figure,Beverages,420.12
+PROD1082,Thus,Electronics,73.51
+PROD1083,Information,Household,695.55
+PROD1084,Like,Electronics,570.94
+PROD1085,Red,Household,272.74
+PROD1086,Policy,Personal Care,528.02
+PROD1087,Make,Electronics,103.0
+PROD1088,Last,Snacks,580.19
+PROD1089,Buy,Personal Care,930.0
+PROD1090,Stand,Personal Care,325.38
+PROD1091,Others,Personal Care,670.74
+PROD1092,Author,Household,140.48
+PROD1093,Medical,Electronics,719.16
+PROD1094,Provide,Household,296.51
+PROD1095,That,Beverages,191.36
+PROD1096,Instead,Household,590.65
+PROD1097,Project,Household,29.91
+PROD1098,Again,Snacks,830.65
+PROD1099,Assume,Household,14.65
+PROD1100,Worker,Household,681.04
+PROD1101,Bank,Personal Care,277.31
+PROD1102,This,Household,737.84
+PROD1103,Be,Personal Care,962.57
+PROD1104,Today,Electronics,256.27
+PROD1105,Upon,Personal Care,580.4
+PROD1106,Six,Snacks,596.12
+PROD1107,Serious,Personal Care,576.53
+PROD1108,Natural,Household,230.85
+PROD1109,Economic,Household,953.22
+PROD1110,Wait,Snacks,452.65
+PROD1111,Any,Snacks,847.94
+PROD1112,Inside,Electronics,702.48
+PROD1113,Baby,Electronics,304.46
+PROD1114,You,Personal Care,815.66
+PROD1115,Participant,Snacks,402.54
+PROD1116,Put,Personal Care,882.29
+PROD1117,Election,Beverages,585.46
+PROD1118,Magazine,Beverages,882.92
+PROD1119,Little,Personal Care,695.61
+PROD1120,All,Snacks,728.0
+PROD1121,Marriage,Snacks,506.31
+PROD1122,Six,Electronics,956.52
+PROD1123,Right,Snacks,647.55
+PROD1124,Goal,Personal Care,429.62
+PROD1125,Safe,Personal Care,610.33
+PROD1126,Second,Electronics,29.0
+PROD1127,Garden,Personal Care,308.56
+PROD1128,Pm,Snacks,663.57
+PROD1129,List,Personal Care,297.18
+PROD1130,Thus,Beverages,621.84
+PROD1131,Address,Electronics,434.48
+PROD1132,During,Beverages,144.12
+PROD1133,Grow,Electronics,305.3
+PROD1134,A,Household,574.27
+PROD1135,Data,Household,594.96
+PROD1136,Bring,Electronics,578.58
+PROD1137,Bad,Electronics,656.67
+PROD1138,Page,Household,655.58
+PROD1139,Represent,Snacks,437.1
+PROD1140,Likely,Personal Care,897.58
+PROD1141,Not,Household,373.89
+PROD1142,Attack,Snacks,441.51
+PROD1143,Deal,Beverages,893.0
+PROD1144,Plant,Personal Care,808.13
+PROD1145,Recent,Beverages,706.85
+PROD1146,Affect,Beverages,109.22
+PROD1147,Answer,Household,920.29
+PROD1148,Last,Beverages,717.1
+PROD1149,Whether,Household,998.86
+PROD1150,Again,Personal Care,157.95
+PROD1151,Near,Beverages,869.44
+PROD1152,Collection,Electronics,170.87
+PROD1153,Current,Snacks,619.4
+PROD1154,Conference,Beverages,132.58
+PROD1155,Three,Personal Care,849.53
+PROD1156,Term,Electronics,809.25
+PROD1157,Low,Personal Care,573.41
+PROD1158,Always,Beverages,413.11
+PROD1159,Economic,Personal Care,78.48
+PROD1160,Different,Personal Care,700.45
+PROD1161,Major,Snacks,459.01
+PROD1162,Television,Personal Care,724.84
+PROD1163,Matter,Beverages,867.72
+PROD1164,Level,Personal Care,975.77
+PROD1165,Meet,Household,857.25
+PROD1166,Pressure,Electronics,21.6
+PROD1167,Subject,Personal Care,366.38
+PROD1168,Moment,Snacks,732.69
+PROD1169,Board,Household,179.91
+PROD1170,Response,Snacks,525.83
+PROD1171,Later,Personal Care,63.79
+PROD1172,Human,Electronics,208.0
+PROD1173,Answer,Personal Care,28.34
+PROD1174,Road,Snacks,795.76
+PROD1175,Politics,Beverages,231.69
+PROD1176,Plan,Snacks,351.9
+PROD1177,Energy,Household,928.8
+PROD1178,Mean,Beverages,707.37
+PROD1179,Family,Personal Care,41.52
+PROD1180,Enough,Personal Care,173.05
+PROD1181,Report,Personal Care,625.26
+PROD1182,Me,Personal Care,581.46
+PROD1183,Sense,Electronics,245.51
+PROD1184,Amount,Personal Care,934.87
+PROD1185,Training,Personal Care,617.83
+PROD1186,Listen,Snacks,540.28
+PROD1187,Hit,Personal Care,594.01
+PROD1188,Road,Household,732.82
+PROD1189,Professor,Household,318.83
+PROD1190,Condition,Snacks,404.24
+PROD1191,Reveal,Electronics,217.75
+PROD1192,Single,Electronics,194.33
+PROD1193,Customer,Snacks,944.93
+PROD1194,Support,Snacks,742.16
+PROD1195,World,Beverages,495.55
+PROD1196,Newspaper,Personal Care,235.14
+PROD1197,Imagine,Snacks,261.81
+PROD1198,Size,Personal Care,67.45
+PROD1199,Air,Snacks,440.07
+PROD1200,Community,Snacks,318.68
+PROD1201,Case,Household,699.38
+PROD1202,Close,Personal Care,383.97
+PROD1203,With,Snacks,187.81
+PROD1204,Eat,Snacks,34.43
+PROD1205,Herself,Beverages,76.58
+PROD1206,Purpose,Snacks,682.6
+PROD1207,We,Snacks,459.16
+PROD1208,Safe,Beverages,541.21
+PROD1209,Nothing,Beverages,897.7
+PROD1210,Prove,Household,990.44
+PROD1211,Young,Household,224.73
+PROD1212,News,Personal Care,666.45
+PROD1213,School,Snacks,270.69
+PROD1214,Thus,Electronics,30.44
+PROD1215,Price,Beverages,760.79
+PROD1216,Moment,Personal Care,326.82
+PROD1217,Benefit,Electronics,389.63
+PROD1218,Concern,Snacks,592.43
+PROD1219,Market,Personal Care,832.74
+PROD1220,Senior,Personal Care,632.69
+PROD1221,Anyone,Personal Care,873.92
+PROD1222,Standard,Snacks,280.81
+PROD1223,Model,Electronics,800.07
+PROD1224,Head,Electronics,193.78
+PROD1225,Need,Electronics,953.26
+PROD1226,Mouth,Personal Care,690.61
+PROD1227,Pass,Beverages,223.35
+PROD1228,Moment,Snacks,947.9
+PROD1229,Study,Snacks,733.55
+PROD1230,Task,Personal Care,261.4
+PROD1231,Meeting,Personal Care,221.18
+PROD1232,Be,Personal Care,523.02
+PROD1233,Become,Beverages,35.41
+PROD1234,Race,Household,215.4
+PROD1235,Federal,Snacks,430.44
+PROD1236,Air,Personal Care,380.43
+PROD1237,Interview,Electronics,468.94
+PROD1238,Southern,Personal Care,284.85
+PROD1239,Next,Snacks,590.92
+PROD1240,Keep,Beverages,865.22
+PROD1241,Trouble,Electronics,126.36
+PROD1242,Allow,Electronics,522.21
+PROD1243,Out,Household,140.75
+PROD1244,Man,Personal Care,719.69
+PROD1245,Computer,Electronics,402.1
+PROD1246,By,Personal Care,569.77
+PROD1247,White,Electronics,191.45
+PROD1248,Picture,Household,153.4
+PROD1249,Issue,Snacks,493.18
+PROD1250,Stage,Household,362.06
+PROD1251,Leave,Electronics,941.03
+PROD1252,Suggest,Personal Care,767.67
+PROD1253,Become,Personal Care,751.18
+PROD1254,Including,Beverages,904.68
+PROD1255,College,Household,92.59
+PROD1256,High,Electronics,556.67
+PROD1257,Rule,Beverages,588.63
+PROD1258,Forget,Electronics,962.32
+PROD1259,Process,Electronics,299.23
+PROD1260,Stop,Household,248.42
+PROD1261,Fire,Snacks,109.29
+PROD1262,Decide,Beverages,26.27
+PROD1263,Win,Personal Care,930.23
+PROD1264,Deal,Electronics,673.22
+PROD1265,Shoulder,Beverages,787.3
+PROD1266,Course,Electronics,288.91
+PROD1267,Return,Electronics,590.55
+PROD1268,Believe,Electronics,73.32
+PROD1269,Certainly,Household,490.77
+PROD1270,Catch,Beverages,977.72
+PROD1271,Girl,Electronics,877.74
+PROD1272,Reflect,Electronics,344.78
+PROD1273,Summer,Snacks,961.95
+PROD1274,Center,Snacks,239.38
+PROD1275,Speech,Snacks,949.83
+PROD1276,Store,Personal Care,941.96
+PROD1277,Control,Household,801.21
+PROD1278,Make,Household,634.14
+PROD1279,Letter,Beverages,875.55
+PROD1280,Deal,Snacks,300.09
+PROD1281,Benefit,Electronics,850.45
+PROD1282,Kid,Electronics,621.7
+PROD1283,Bring,Household,23.1
+PROD1284,Shoulder,Beverages,353.76
+PROD1285,Help,Snacks,156.66
+PROD1286,Official,Electronics,982.01
+PROD1287,Although,Household,483.59
+PROD1288,Land,Snacks,502.42
+PROD1289,Sense,Personal Care,643.08
+PROD1290,Family,Household,374.9
+PROD1291,Onto,Beverages,145.53
+PROD1292,Up,Household,823.9
+PROD1293,Well,Household,197.95
+PROD1294,Table,Household,516.21
+PROD1295,Team,Beverages,232.07
+PROD1296,Ago,Electronics,106.87
+PROD1297,Call,Household,863.57
+PROD1298,Recent,Beverages,973.19
+PROD1299,Support,Electronics,961.23
+PROD1300,Manager,Electronics,907.49
+PROD1301,Fast,Household,776.31
+PROD1302,Crime,Personal Care,339.81
+PROD1303,Concern,Personal Care,90.29
+PROD1304,Perhaps,Beverages,413.17
+PROD1305,Item,Personal Care,239.91
+PROD1306,Together,Personal Care,141.16
+PROD1307,It,Beverages,62.89
+PROD1308,Real,Beverages,728.34
+PROD1309,Resource,Snacks,21.31
+PROD1310,Machine,Personal Care,772.87
+PROD1311,Son,Snacks,155.48
+PROD1312,Single,Beverages,88.73
+PROD1313,Official,Beverages,98.71
+PROD1314,More,Snacks,675.33
+PROD1315,Put,Personal Care,252.91
+PROD1316,Four,Personal Care,426.33
+PROD1317,Spring,Electronics,561.8
+PROD1318,Pattern,Beverages,861.95
+PROD1319,Image,Household,729.77
+PROD1320,Strong,Electronics,277.62
+PROD1321,White,Electronics,140.17
+PROD1322,Grow,Electronics,64.82
+PROD1323,Benefit,Electronics,308.58
+PROD1324,Have,Electronics,269.5
+PROD1325,Walk,Personal Care,461.58
+PROD1326,Should,Snacks,686.45
+PROD1327,Final,Personal Care,698.67
+PROD1328,Paper,Beverages,290.68
+PROD1329,Town,Electronics,386.13
+PROD1330,Collection,Snacks,189.34
+PROD1331,Our,Personal Care,790.66
+PROD1332,However,Electronics,66.28
+PROD1333,Statement,Household,700.03
+PROD1334,Food,Snacks,780.91
+PROD1335,Exactly,Personal Care,779.63
+PROD1336,Including,Personal Care,266.83
+PROD1337,State,Beverages,380.08
+PROD1338,Talk,Personal Care,591.72
+PROD1339,Over,Personal Care,280.09
+PROD1340,Great,Beverages,377.14
+PROD1341,Catch,Beverages,205.08
+PROD1342,Nothing,Electronics,465.26
+PROD1343,Air,Electronics,54.17
+PROD1344,Difference,Household,801.8
+PROD1345,Wait,Snacks,86.19
+PROD1346,Ten,Household,523.65
+PROD1347,Drive,Household,313.74
+PROD1348,Old,Personal Care,581.77
+PROD1349,Ok,Household,959.84
+PROD1350,Recognize,Snacks,649.11
+PROD1351,Most,Personal Care,45.01
+PROD1352,Student,Personal Care,436.1
+PROD1353,In,Snacks,514.92
+PROD1354,Series,Beverages,540.82
+PROD1355,Community,Personal Care,684.58
+PROD1356,Cultural,Household,284.82
+PROD1357,How,Beverages,137.57
+PROD1358,Police,Electronics,398.75
+PROD1359,Candidate,Electronics,956.84
+PROD1360,See,Personal Care,195.26
+PROD1361,Technology,Electronics,904.94
+PROD1362,Find,Personal Care,548.37
+PROD1363,Key,Snacks,462.34
+PROD1364,List,Beverages,883.22
+PROD1365,Imagine,Snacks,464.02
+PROD1366,Perhaps,Personal Care,726.93
+PROD1367,Image,Beverages,405.04
+PROD1368,Article,Household,905.0
+PROD1369,Happen,Electronics,693.12
+PROD1370,College,Snacks,702.63
+PROD1371,Six,Beverages,334.44
+PROD1372,Source,Household,759.21
+PROD1373,Operation,Beverages,639.7
+PROD1374,Woman,Beverages,247.62
+PROD1375,Such,Electronics,168.93
+PROD1376,Range,Electronics,798.43
+PROD1377,Plant,Household,959.57
+PROD1378,Could,Electronics,463.56
+PROD1379,May,Household,595.07
+PROD1380,Image,Beverages,859.15
+PROD1381,Measure,Electronics,462.65
+PROD1382,Serious,Personal Care,952.36
+PROD1383,Deep,Household,579.99
+PROD1384,Best,Household,822.56
+PROD1385,Indicate,Electronics,909.76
+PROD1386,Day,Personal Care,817.37
+PROD1387,Serve,Beverages,167.82
+PROD1388,At,Beverages,632.61
+PROD1389,Interview,Snacks,404.45
+PROD1390,Provide,Household,72.09
+PROD1391,Cold,Electronics,429.79
+PROD1392,Though,Household,266.1
+PROD1393,Wear,Personal Care,850.55
+PROD1394,Interesting,Beverages,42.97
+PROD1395,Easy,Personal Care,959.39
+PROD1396,Identify,Beverages,361.82
+PROD1397,Human,Electronics,363.14
+PROD1398,White,Beverages,26.17
+PROD1399,Water,Household,193.38
+PROD1400,Rise,Snacks,407.25
+PROD1401,Fly,Electronics,930.0
+PROD1402,Let,Personal Care,108.62
+PROD1403,Fight,Snacks,945.85
+PROD1404,Surface,Personal Care,870.79
+PROD1405,Above,Snacks,459.62
+PROD1406,Join,Household,333.43
+PROD1407,Apply,Snacks,240.42
+PROD1408,Career,Beverages,618.32
+PROD1409,Technology,Electronics,42.74
+PROD1410,During,Household,25.45
+PROD1411,Blood,Electronics,434.51
+PROD1412,Space,Electronics,77.39
+PROD1413,Anyone,Beverages,259.42
+PROD1414,Threat,Personal Care,228.95
+PROD1415,Hard,Personal Care,260.66
+PROD1416,Form,Beverages,139.74
+PROD1417,Doctor,Snacks,21.92
+PROD1418,Industry,Snacks,124.33
+PROD1419,Where,Household,622.3
+PROD1420,Course,Beverages,974.51
+PROD1421,Between,Snacks,990.44
+PROD1422,Shake,Snacks,414.96
+PROD1423,Better,Personal Care,171.32
+PROD1424,Doctor,Household,642.37
+PROD1425,Go,Electronics,495.4
+PROD1426,Political,Personal Care,989.52
+PROD1427,She,Household,74.65
+PROD1428,Road,Personal Care,785.4
+PROD1429,Third,Household,295.51
+PROD1430,Size,Personal Care,249.0
+PROD1431,Young,Beverages,665.88
+PROD1432,Card,Beverages,253.6
+PROD1433,Cut,Beverages,669.2
+PROD1434,Style,Personal Care,522.14
+PROD1435,Huge,Household,429.85
+PROD1436,Care,Electronics,559.14
+PROD1437,Ever,Household,294.18
+PROD1438,Information,Personal Care,709.51
+PROD1439,Strong,Electronics,420.71
+PROD1440,Too,Beverages,366.94
+PROD1441,Tough,Household,830.37
+PROD1442,Glass,Snacks,925.72
+PROD1443,Wonder,Snacks,55.55
+PROD1444,Record,Personal Care,240.3
+PROD1445,Personal,Household,355.03
+PROD1446,Assume,Personal Care,816.82
+PROD1447,Be,Household,985.64
+PROD1448,Knowledge,Electronics,969.28
+PROD1449,Main,Household,905.9
+PROD1450,Law,Beverages,303.59
+PROD1451,Employee,Personal Care,992.09
+PROD1452,Impact,Personal Care,256.93
+PROD1453,Outside,Snacks,114.85
+PROD1454,Build,Household,951.44
+PROD1455,Not,Snacks,241.09
+PROD1456,Street,Household,692.87
+PROD1457,Deep,Household,67.77
+PROD1458,Baby,Personal Care,733.4
+PROD1459,Maybe,Household,882.9
+PROD1460,Thousand,Household,279.71
+PROD1461,Program,Household,385.27
+PROD1462,Officer,Personal Care,380.55
+PROD1463,Degree,Electronics,751.3
+PROD1464,Open,Personal Care,245.43
+PROD1465,Ever,Electronics,180.13
+PROD1466,Apply,Household,454.8
+PROD1467,Eat,Personal Care,311.42
+PROD1468,Conference,Beverages,840.8
+PROD1469,Receive,Beverages,245.36
+PROD1470,Again,Beverages,507.37
+PROD1471,Break,Household,943.16
+PROD1472,Change,Snacks,637.66
+PROD1473,Onto,Snacks,868.62
+PROD1474,Century,Electronics,940.81
+PROD1475,Concern,Electronics,753.26
+PROD1476,Seven,Snacks,702.58
+PROD1477,Past,Snacks,968.29
+PROD1478,Agree,Beverages,994.46
+PROD1479,Address,Personal Care,457.3
+PROD1480,Deep,Electronics,80.16
+PROD1481,Painting,Household,299.87
+PROD1482,Race,Personal Care,160.83
+PROD1483,Traditional,Electronics,423.31
+PROD1484,Someone,Household,139.98
+PROD1485,Believe,Household,608.08
+PROD1486,Us,Household,388.98
+PROD1487,Up,Personal Care,896.43
+PROD1488,Painting,Personal Care,968.12
+PROD1489,Travel,Household,551.42
+PROD1490,South,Household,282.08
+PROD1491,Happen,Beverages,596.31
+PROD1492,Control,Personal Care,897.79
+PROD1493,Somebody,Beverages,412.67
+PROD1494,Hospital,Beverages,556.56
+PROD1495,Popular,Electronics,278.94
+PROD1496,Key,Household,460.89
+PROD1497,Arm,Snacks,407.7
+PROD1498,Teacher,Electronics,255.93
+PROD1499,Simply,Electronics,510.81
