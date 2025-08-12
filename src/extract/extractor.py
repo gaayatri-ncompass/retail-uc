@@ -1,10 +1,11 @@
 import pandas as pd
 from src.utils.config import get_staging_db_connector
+from src.utils.exceptions import ExtractionError, DatabaseError
+from src.utils.validator import validate_dataframe
 
 
 def create_etl_tables(db):
 
-    # Create etl_process_log table
     log_table_query = '''
         CREATE TABLE IF NOT EXISTS etl_process_log (
             table_name VARCHAR(255) PRIMARY KEY,
@@ -13,9 +14,7 @@ def create_etl_tables(db):
         )
     '''
     if not db.execute_query(log_table_query):
-        print("Failed to create etl_process_log table")
-        return False
-
+        raise DatabaseError("Failed to create etl_process_log table", "DB001")
 
     create_tables_queries = {
         'customers': '''
@@ -76,8 +75,8 @@ def create_etl_tables(db):
 
     for table, query in create_tables_queries.items():
         if not db.execute_query(query):
-            print(f"Failed to create staging table for {table}")
-            return False
+            raise DatabaseError(
+                f"Failed to create staging table for {table}", "DB002")
     return True
 
 
@@ -88,26 +87,36 @@ def load_csv_to_staging(db, file_name, table_name, pk_column):
         df_new = pd.read_csv(f'data/{file_name}', dtype=str)
         df_new.drop_duplicates(inplace=True)
 
-        # Get the last processed ID from the log table
         log_query = f"SELECT last_processed_id FROM etl_process_log WHERE table_name = '{table_name}'"
         last_id_df = db.run_query(log_query)
-        
+
         last_processed_id = None
         if last_id_df is not None and not last_id_df.empty:
             last_processed_id = last_id_df['last_processed_id'].iloc[0]
 
         if last_processed_id:
-            # Filter for new records based on the primary key
-            # This assumes the PK can be sorted lexicographically or numerically
+
             df_to_insert = df_new[df_new[pk_column] > last_processed_id]
+            print(
+                f"Found {len(df_to_insert)} new records out of {len(df_new)} total records")
         else:
             df_to_insert = df_new
+            print(
+                f"No previous processing found, processing all {len(df_new)} records")
 
         table_full_name = f'stg_{table_name}'
 
         if df_to_insert.empty:
             print(f"No new rows to insert into {table_full_name}")
             return True
+
+        print(
+            f"Validating {len(df_to_insert)} new records for {table_name}...")
+        is_valid = validate_dataframe(df_to_insert, table_name)
+
+        if not is_valid:
+            print(
+                f"  Warning: Data validation found issues in {len(df_to_insert)} new records from {file_name}")
 
         df_to_insert.to_sql(
             name=table_full_name,
@@ -118,7 +127,6 @@ def load_csv_to_staging(db, file_name, table_name, pk_column):
 
         print(f"Inserted {len(df_to_insert)} new rows into {table_full_name}")
 
-        # Update the log table with the new max ID
         if not df_to_insert.empty:
             max_id = df_to_insert[pk_column].max()
             update_query = f"""
@@ -130,9 +138,13 @@ def load_csv_to_staging(db, file_name, table_name, pk_column):
 
         return True
 
+    except FileNotFoundError:
+        raise ExtractionError(
+            f"CSV file not found: data/{file_name}")
+    except pd.errors.EmptyDataError:
+        raise ExtractionError(f"CSV file is empty: data/{file_name}")
     except Exception as e:
-        print(f"Error loading {file_name}: {str(e)}")
-        return False
+        raise ExtractionError(f"Error loading {file_name}: {str(e)}")
 
 
 def run_extraction():
@@ -140,24 +152,35 @@ def run_extraction():
     print("Extraction process started...")
     db = get_staging_db_connector()
 
-    db.connect()
+    try:
+        db.connect()
 
-    if not create_etl_tables(db):
-        print("Failed to create ETL tables")
+        if not create_etl_tables(db):
+            raise DatabaseError("Failed to create ETL tables")
+
+        files_to_load = {
+            'customers.csv': ('customers', 'customer_id'),
+            'products.csv': ('products', 'product_id'),
+            'stores.csv': ('stores', 'store_id'),
+            'sales.csv': ('sales', 'sale_id'),
+            'inventory.csv': ('inventory', 'last_updated'),
+            'suppliers.csv': ('suppliers', 'supplier_id')
+        }
+
+        for file_name, (table_name, pk_column) in files_to_load.items():
+            try:
+                if not load_csv_to_staging(db, file_name, table_name, pk_column):
+                    raise ExtractionError(
+                        f"Failed to load {file_name}", "EXT004")
+            except (ExtractionError, DatabaseError):
+                raise
+            except Exception as e:
+                raise ExtractionError(
+                    f"Unexpected error loading {file_name}: {str(e)}", "EXT005")
+
+    except (ExtractionError, DatabaseError):
+        raise
+    except Exception as e:
+        raise ExtractionError(f"Extraction process failed: {str(e)}", "EXT006")
+    finally:
         db.disconnect()
-        return
-
-    files_to_load = {
-        'customers.csv': ('customers', 'customer_id'),
-        'products.csv': ('products', 'product_id'),
-        'stores.csv': ('stores', 'store_id'),
-        'sales.csv': ('sales', 'sale_id'),
-        'inventory.csv': ('inventory', 'last_updated'),
-        'suppliers.csv': ('suppliers', 'supplier_id')
-    }
-
-    for file_name, (table_name, pk_column) in files_to_load.items():
-        if not load_csv_to_staging(db, file_name, table_name, pk_column):
-            print(f"Failed to load {file_name}")
-
-    db.disconnect()

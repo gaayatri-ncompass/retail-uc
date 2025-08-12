@@ -1,10 +1,55 @@
 
 
-from src.utils.config import get_warehouse_db_connector
+from src.utils.config import get_warehouse_db_connector, get_staging_db_connector
+
+
+def reset_etl_metadata():
+    """Reset ETL metadata in staging database"""
+    print("Resetting ETL metadata in staging database...")
+
+    staging_db = get_staging_db_connector()
+    staging_db.connect()
+
+    try:
+        # Clear ETL process log (watermarks)
+        if staging_db.execute_query("TRUNCATE TABLE etl_process_log"):
+            print("  ✅ Cleared ETL process log (watermarks)")
+        else:
+            print("  ❌ Failed to clear ETL process log")
+
+        # Clear transformation metadata (incremental transformation watermarks)
+        try:
+            if staging_db.execute_query("TRUNCATE TABLE transformation_metadata"):
+                print("  ✅ Cleared transformation metadata (transformation watermarks)")
+            else:
+                print("  ⚠️ transformation_metadata table not found or failed to clear")
+        except Exception as e:
+            print(f"  ⚠️ Could not clear transformation_metadata: {e}")
+
+        # Clear staging tables to ensure fresh data load
+        staging_tables = [
+            "stg_customers",
+            "stg_products",
+            "stg_stores",
+            "stg_sales",
+            "stg_inventory",
+            "stg_suppliers"
+        ]
+
+        for table in staging_tables:
+            if staging_db.execute_query(f"TRUNCATE TABLE {table}"):
+                print(f"  ✅ Cleared {table}")
+            else:
+                print(f"  ❌ Failed to clear {table}")
+
+    except Exception as e:
+        print(f"  ❌ Error resetting ETL metadata: {e}")
+    finally:
+        staging_db.disconnect()
 
 
 def drop_and_recreate_tables():
-
+    """Drop and recreate warehouse tables"""
     print("Dropping and recreating warehouse tables...")
 
     db = get_warehouse_db_connector()
@@ -22,14 +67,14 @@ def drop_and_recreate_tables():
     ]
 
     try:
-
+        # Disable foreign key checks
         db.execute_query("SET FOREIGN_KEY_CHECKS = 0")
 
         for query in drop_queries:
             if db.execute_query(query):
-                print(f"Dropped table")
+                print("  ✅ Dropped table")
             else:
-                print(f"Failed to drop table")
+                print("  ❌ Failed to drop table")
 
         db.execute_query("SET FOREIGN_KEY_CHECKS = 1")
 
@@ -141,21 +186,35 @@ def drop_and_recreate_tables():
 
         for table_name, query in create_tables_queries.items():
             if db.execute_query(query):
-                print(f"Created table {table_name}")
+                print(f"  ✅ Created table {table_name}")
             else:
-                print(f"Failed to create table {table_name}")
+                print(f"  ❌ Failed to create table {table_name}")
 
-        print("Process done")
+        print("Warehouse reset complete!")
 
     except Exception as e:
-        print(f"Error during table recreation: {e}")
+        print(f"❌ Error during table recreation: {e}")
 
     finally:
         db.disconnect()
 
 
 def main():
+    """Main function to reset both warehouse and ETL metadata"""
+    print("🔄 Starting complete ETL reset...")
+    print("=" * 50)
+
+    # Step 1: Reset warehouse tables
     drop_and_recreate_tables()
+
+    print("=" * 50)
+
+    # Step 2: Reset ETL metadata
+    reset_etl_metadata()
+
+    print("=" * 50)
+    print("🎉 Complete ETL reset finished!")
+    print("You can now run a fresh ETL process with: python main.py")
 
 
 if __name__ == "__main__":

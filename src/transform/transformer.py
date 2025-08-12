@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from src.utils.config import get_staging_db_connector, get_warehouse_db_connector
+from src.utils.exceptions import TransformationError, DatabaseError
 
 
 def clean_customer_data(df):
@@ -14,7 +15,8 @@ def clean_customer_data(df):
     df.loc[:, 'email'] = df['email'].str.lower().str.strip()
     df.loc[:, 'phone'] = df['phone'].str.replace(r'[^\d+]', '', regex=True)
     df.loc[:, 'address'] = df['address'].str.strip()
-    df.loc[:, 'signup_date'] = pd.to_datetime(df['signup_date'], errors='coerce')
+    df.loc[:, 'signup_date'] = pd.to_datetime(
+        df['signup_date'], errors='coerce')
 
     df = df.dropna(subset=['signup_date'])
 
@@ -71,7 +73,8 @@ def clean_sales_data(df):
     df = df.drop_duplicates(subset=['sale_id'])
 
     df.loc[:, 'quantity'] = pd.to_numeric(df['quantity'], errors='coerce')
-    df.loc[:, 'total_amount'] = pd.to_numeric(df['total_amount'], errors='coerce')
+    df.loc[:, 'total_amount'] = pd.to_numeric(
+        df['total_amount'], errors='coerce')
     df.loc[:, 'sale_date'] = pd.to_datetime(df['sale_date'], errors='coerce')
 
     df = df.dropna(subset=['quantity', 'total_amount', 'sale_date'])
@@ -89,8 +92,10 @@ def clean_inventory_data(df):
 
     df = df.drop_duplicates(subset=['product_id', 'store_id', 'last_updated'])
 
-    df.loc[:, 'stock_level'] = pd.to_numeric(df['stock_level'], errors='coerce')
-    df.loc[:, 'last_updated'] = pd.to_datetime(df['last_updated'], errors='coerce')
+    df.loc[:, 'stock_level'] = pd.to_numeric(
+        df['stock_level'], errors='coerce')
+    df.loc[:, 'last_updated'] = pd.to_datetime(
+        df['last_updated'], errors='coerce')
 
     df = df.dropna(subset=['stock_level', 'last_updated'])
 
@@ -121,62 +126,86 @@ def create_promotion_dimension():
 
 
 def transform_data():
+    """Transform staging data to warehouse-ready format"""
 
-    print("Starting data transformation...")
+    print("Starting FULL data transformation...")
 
     staging_db = get_staging_db_connector()
-    staging_db.connect()
-
     warehouse_db = get_warehouse_db_connector()
-    warehouse_db.connect()
 
     try:
+        staging_db.connect()
+        warehouse_db.connect()
 
-        customers_df = staging_db.run_query("SELECT * FROM stg_customers")
-        products_df = staging_db.run_query("SELECT * FROM stg_products")
-        stores_df = staging_db.run_query("SELECT * FROM stg_stores")
-        suppliers_df = staging_db.run_query("SELECT * FROM stg_suppliers")
-        sales_df = staging_db.run_query("SELECT * FROM stg_sales")
-        inventory_df = staging_db.run_query("SELECT * FROM stg_inventory")
+        # Extract ALL data from staging tables (not incremental)
+        try:
+            print("Reading ALL data from staging tables...")
+            customers_df = staging_db.run_query("SELECT * FROM stg_customers")
+            products_df = staging_db.run_query("SELECT * FROM stg_products")
+            stores_df = staging_db.run_query("SELECT * FROM stg_stores")
+            suppliers_df = staging_db.run_query("SELECT * FROM stg_suppliers")
+            sales_df = staging_db.run_query("SELECT * FROM stg_sales")
+            inventory_df = staging_db.run_query("SELECT * FROM stg_inventory")
+        except Exception as e:
+            raise DatabaseError(
+                f"Failed to extract data from staging: {str(e)}", "DB004")
 
-        print("Cleaning customer data...")
-        customers_clean = clean_customer_data(customers_df)
+        # Clean data with error handling
+        try:
+            print("Cleaning customer data...")
+            customers_clean = clean_customer_data(customers_df)
 
-        print("Cleaning product data...")
-        products_clean = clean_product_data(products_df)
+            print("Cleaning product data...")
+            products_clean = clean_product_data(products_df)
 
-        print("Cleaning store data...")
-        stores_clean = clean_store_data(stores_df)
+            print("Cleaning store data...")
+            stores_clean = clean_store_data(stores_df)
 
-        print("Cleaning supplier data...")
-        suppliers_clean = clean_supplier_data(suppliers_df)
+            print("Cleaning supplier data...")
+            suppliers_clean = clean_supplier_data(suppliers_df)
 
-        print("Cleaning sales data...")
-        sales_clean = clean_sales_data(sales_df)
+            print("Cleaning sales data...")
+            sales_clean = clean_sales_data(sales_df)
 
-        print("Cleaning inventory data...")
-        inventory_clean = clean_inventory_data(inventory_df)
+            print("Cleaning inventory data...")
+            inventory_clean = clean_inventory_data(inventory_df)
+        except Exception as e:
+            raise TransformationError(
+                f"Data cleaning failed: {str(e)}", "TRF001")
 
-        print("Creating date dimension...")
-        if not sales_clean.empty and not inventory_clean.empty:
-            min_date = min(sales_clean['sale_date'].min(
-            ), inventory_clean['last_updated'].min())
-            max_date = max(sales_clean['sale_date'].max(
-            ), inventory_clean['last_updated'].max())
-        elif not sales_clean.empty:
-            min_date = sales_clean['sale_date'].min()
-            max_date = sales_clean['sale_date'].max()
-        elif not inventory_clean.empty:
-            min_date = inventory_clean['last_updated'].min()
-            max_date = inventory_clean['last_updated'].max()
-        else:
-            min_date = pd.Timestamp('2020-01-01')
-            max_date = pd.Timestamp('2025-12-31')
+        # Create dimensions
+        try:
+            print("Creating date dimension...")
+            if not sales_clean.empty and not inventory_clean.empty:
+                min_date = min(sales_clean['sale_date'].min(
+                ), inventory_clean['last_updated'].min())
+                max_date = max(sales_clean['sale_date'].max(
+                ), inventory_clean['last_updated'].max())
+            elif not sales_clean.empty:
+                min_date = sales_clean['sale_date'].min()
+                max_date = sales_clean['sale_date'].max()
+            elif not inventory_clean.empty:
+                min_date = inventory_clean['last_updated'].min()
+                max_date = inventory_clean['last_updated'].max()
+            else:
+                min_date = pd.Timestamp('2020-01-01')
+                max_date = pd.Timestamp('2030-12-31')  # Extended default range
 
-        date_dim = create_date_dimension(min_date, max_date)
+            # Ensure we have a reasonable buffer for future dates
+            # 1 year before earliest date
+            min_date = min_date - pd.DateOffset(years=1)
+            # 2 years after latest date
+            max_date = max_date + pd.DateOffset(years=2)
 
-        print("Creating promotion dimension...")
-        promotion_dim = create_promotion_dimension()
+            print(
+                f"Creating date dimension from {min_date.date()} to {max_date.date()}")
+            date_dim = create_date_dimension(min_date, max_date)
+
+            print("Creating promotion dimension...")
+            promotion_dim = create_promotion_dimension()
+        except Exception as e:
+            raise TransformationError(
+                f"Dimension creation failed: {str(e)}", "TRF002")
 
         transformed_data = {
             'customers': customers_clean,
@@ -192,9 +221,11 @@ def transform_data():
         print("Data transformation completed successfully!")
         return transformed_data
 
+    except (TransformationError, DatabaseError):
+        raise
     except Exception as e:
-        print(f"Error during transformation: {str(e)}")
-        return None
+        raise TransformationError(
+            f"Transformation process failed: {str(e)}", "TRF003")
     finally:
         staging_db.disconnect()
         warehouse_db.disconnect()

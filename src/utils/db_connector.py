@@ -1,5 +1,6 @@
 import pandas as pd
 from sqlalchemy import create_engine, text
+from .exceptions import DatabaseError
 
 
 class DBConnector:
@@ -19,8 +20,8 @@ class DBConnector:
                 self.engine = create_engine(conn_str)
                 print(f"Connection successful to database '{self.database}'")
             except Exception as e:
-                print(f"ERROR: Connection failed: {e}")
-                self.engine = None
+                raise DatabaseError(
+                    f"Failed to connect to database '{self.database}': {str(e)}", "DB_CONN_001")
 
     def disconnect(self):
 

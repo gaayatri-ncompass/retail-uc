@@ -1,9 +1,10 @@
+from src.utils.exceptions import LoadingError, DatabaseError
+from src.utils.config import get_warehouse_db_connector
+from sqlalchemy import text
+import logging
+import traceback
 import pandas as pd
 pd.set_option('future.no_silent_downcasting', True)
-import traceback
-import logging
-from sqlalchemy import text
-from src.utils.config import get_warehouse_db_connector
 
 
 logging.basicConfig(level=logging.INFO,
@@ -12,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 def create_warehouse_tables(db):
-    """Create warehouse tables with improved error handling"""
 
     warehouse_tables = {
         'dimcustomer': '''
@@ -122,16 +122,14 @@ def create_warehouse_tables(db):
 
     try:
         for table_name, query in warehouse_tables.items():
-            logger.info(f"Creating table: {table_name}")
             result = db.execute_query(query)
             if not result:
                 logger.error(f"Failed to create table {table_name}")
                 return False
-            logger.info(f"Successfully created table {table_name}")
+        logger.info("✅ Warehouse tables ready")
         return True
     except Exception as e:
         logger.error(f"Error creating warehouse tables: {str(e)}")
-        logger.error(traceback.format_exc())
         return False
 
 
@@ -149,8 +147,7 @@ def load_dimension_table(db, df, table_name, key_column, batch_size=1000):
                 f"No data to load for {table_name} (DataFrame is empty)")
             return True
 
-        logger.info(
-            f"Loading {len(df)} records into {table_name} in batches of {batch_size}")
+        print(f"Loading {len(df)} records into {table_name}...")
 
         if key_column not in df.columns:
             logger.error(
@@ -158,6 +155,7 @@ def load_dimension_table(db, df, table_name, key_column, batch_size=1000):
             logger.error(f"Available columns: {list(df.columns)}")
             return False
 
+        total_loaded = 0
         for i in range(0, len(df), batch_size):
             batch = df.iloc[i:i+batch_size]
 
@@ -185,16 +183,16 @@ def load_dimension_table(db, df, table_name, key_column, batch_size=1000):
             new_batch = batch[~batch[key_column].isin(existing_keys)]
 
             if new_batch.empty:
-                logger.info(
-                    f"Batch {i//batch_size + 1}: No new records to insert")
-                continue
+                continue  # Skip logging for empty batches
 
             try:
 
                 new_batch = new_batch.copy()
 
-                object_cols = new_batch.select_dtypes(include=['object']).columns
-                new_batch[object_cols] = new_batch[object_cols].fillna('').infer_objects(copy=False)
+                object_cols = new_batch.select_dtypes(
+                    include=['object']).columns
+                new_batch[object_cols] = new_batch[object_cols].fillna(
+                    '').infer_objects(copy=False)
 
                 small_batch_size = min(len(new_batch), 50)
 
@@ -208,13 +206,10 @@ def load_dimension_table(db, df, table_name, key_column, batch_size=1000):
                         method=None
                     )
 
-                logger.info(
-                    f"Batch {i//batch_size + 1}: Inserted {len(new_batch)} new records")
+                total_loaded += len(new_batch)  # Add to total
             except Exception as e:
                 logger.error(
                     f"Error inserting batch {i//batch_size + 1} into {table_name}: {e}")
-                logger.error(f"Batch data types: {new_batch.dtypes}")
-                logger.error(f"Batch sample: {new_batch.head()}")
 
                 for idx, row in new_batch.iterrows():
                     try:
@@ -231,6 +226,13 @@ def load_dimension_table(db, df, table_name, key_column, batch_size=1000):
                         logger.error(
                             f"Failed to insert individual record for {key_column}={row[key_column]}: {row_error}")
                         continue
+
+        # Summary message
+        if total_loaded > 0:
+            logger.info(
+                f"Successfully loaded {total_loaded} new records into {table_name}")
+        else:
+            logger.info(f"No new records to load for {table_name}")
 
         return True
     except Exception as e:
@@ -316,33 +318,39 @@ def load_fact_sales(db, sales_df, batch_size=1000):
             return False
 
         try:
-            # Get the most recent sale date from the warehouse using the date_key
-            max_date_query = "SELECT MAX(d.full_date) as max_date FROM factsales fs JOIN dimdate d ON fs.date_key = d.date_key"
-            max_date_df = db.run_query(max_date_query)
-            last_processed_date = None
-            if max_date_df is not None and not max_date_df.empty and pd.notna(max_date_df['max_date'].iloc[0]):
-                last_processed_date = pd.to_datetime(max_date_df['max_date'].iloc[0])
-                logger.info(f"Last processed sale date from warehouse: {last_processed_date}")
+            # Get existing sale IDs from warehouse for incremental loading
+            existing_sales_query = "SELECT sale_id FROM factsales"
+            existing_sales_df = db.run_query(existing_sales_query)
+            existing_sale_ids = set()
+            if existing_sales_df is not None and not existing_sales_df.empty:
+                existing_sale_ids = set(existing_sales_df['sale_id'].tolist())
+                logger.info(
+                    f"Found {len(existing_sale_ids)} existing sales in warehouse")
         except Exception as e:
-            logger.warning(f"Could not get max sale date, proceeding with full load: {e}")
-            last_processed_date = None
+            logger.warning(
+                f"Could not get existing sale IDs, proceeding with full load: {e}")
+            existing_sale_ids = set()
 
         try:
             sales_df = sales_df.copy()
             sales_df['sale_date_dt'] = pd.to_datetime(sales_df['sale_date'])
 
-            # Filter for new sales records based on the watermark
-            if last_processed_date:
+            # Filter for new sales records based on sale_id (not date)
+            if existing_sale_ids:
                 initial_count = len(sales_df)
-                sales_df = sales_df[sales_df['sale_date_dt'] > last_processed_date]
-                logger.info(f"Filtered sales data from {initial_count} to {len(sales_df)} records based on last processed date.")
+                sales_df = sales_df[~sales_df['sale_id'].isin(
+                    existing_sale_ids)]
+                logger.info(
+                    f"Filtered sales data from {initial_count} to {len(sales_df)} records based on sale_id check.")
 
             if sales_df.empty:
-                logger.info("No new sales records to process after date watermarking.")
+                logger.info(
+                    "No new sales records to process after incremental filtering.")
                 return True
 
             sales_df['sale_date'] = sales_df['sale_date_dt'].dt.date
-            date_keys['full_date'] = pd.to_datetime(date_keys['full_date']).dt.date
+            date_keys['full_date'] = pd.to_datetime(
+                date_keys['full_date']).dt.date
         except Exception as e:
             logger.error(f"Error processing dates: {e}")
             return False
@@ -389,7 +397,8 @@ def load_fact_sales(db, sales_df, batch_size=1000):
                     f"Dropped {dropped_count} records due to missing dimension keys")
 
             if fact_df.empty:
-                logger.info("No new valid sales records to load after dimension key lookup.")
+                logger.info(
+                    "No new valid sales records to load after dimension key lookup.")
                 return True
 
         except Exception as e:
@@ -497,6 +506,7 @@ def load_fact_sales(db, sales_df, batch_size=1000):
                         method=None
                     )
                     total_loaded += len(batch)
+                    # Show progress every 10 batches
                     if (i // actual_batch_size + 1) % 10 == 0:
                         logger.info(
                             f"Loaded {total_loaded}/{len(fact_df)} sales records...")
@@ -521,7 +531,7 @@ def load_fact_sales(db, sales_df, batch_size=1000):
                             continue
 
             logger.info(
-                f"Successfully loaded {total_loaded} new sales records.")
+                f"Successfully loaded {total_loaded} sales records to warehouse")
             return True
         except Exception as e:
             logger.error(f"Error loading fact sales data: {e}")
@@ -580,33 +590,48 @@ def load_fact_inventory(db, inventory_df, batch_size=1000):
             return False
 
         try:
-            # Get the most recent inventory snapshot date from the warehouse
-            max_date_query = "SELECT MAX(d.full_date) as max_date FROM factinventorysnapshot fis JOIN dimdate d ON fis.date_key = d.date_key"
-            max_date_df = db.run_query(max_date_query)
-            last_processed_date = None
-            if max_date_df is not None and not max_date_df.empty and pd.notna(max_date_df['max_date'].iloc[0]):
-                last_processed_date = pd.to_datetime(max_date_df['max_date'].iloc[0])
-                logger.info(f"Last processed inventory date from warehouse: {last_processed_date}")
+            # Get existing inventory IDs from warehouse for incremental loading
+            existing_inventory_query = "SELECT inventory_id FROM factinventorysnapshot"
+            existing_inventory_df = db.run_query(existing_inventory_query)
+            existing_inventory_ids = set()
+            if existing_inventory_df is not None and not existing_inventory_df.empty:
+                existing_inventory_ids = set(
+                    existing_inventory_df['inventory_id'].tolist())
+                logger.info(
+                    f"Found {len(existing_inventory_ids)} existing inventory records in warehouse")
         except Exception as e:
-            logger.warning(f"Could not get max inventory date, proceeding with full load: {e}")
-            last_processed_date = None
+            logger.warning(
+                f"Could not get existing inventory IDs, proceeding with full load: {e}")
+            existing_inventory_ids = set()
 
         try:
             inventory_df = inventory_df.copy()
-            inventory_df['last_updated_dt'] = pd.to_datetime(inventory_df['last_updated'])
+            inventory_df['last_updated_dt'] = pd.to_datetime(
+                inventory_df['last_updated'])
 
-            # Filter for new inventory records based on the watermark
-            if last_processed_date:
+            # Create inventory_id first for comparison
+            inventory_df['inventory_id'] = (
+                inventory_df['product_id'].astype(str) + '_' +
+                inventory_df['store_id'].astype(str) + '_' +
+                inventory_df['last_updated_dt'].dt.strftime('%Y%m%d%H%M%S')
+            )
+
+            # Filter for new inventory records based on inventory_id
+            if existing_inventory_ids:
                 initial_count = len(inventory_df)
-                inventory_df = inventory_df[inventory_df['last_updated_dt'] > last_processed_date]
-                logger.info(f"Filtered inventory data from {initial_count} to {len(inventory_df)} records based on last processed date.")
+                inventory_df = inventory_df[~inventory_df['inventory_id'].isin(
+                    existing_inventory_ids)]
+                logger.info(
+                    f"Filtered inventory data from {initial_count} to {len(inventory_df)} records based on inventory_id check.")
 
             if inventory_df.empty:
-                logger.info("No new inventory records to process after date watermarking.")
+                logger.info(
+                    "No new inventory records to process after incremental filtering.")
                 return True
 
             inventory_df['last_updated_date'] = inventory_df['last_updated_dt'].dt.date
-            date_keys['full_date'] = pd.to_datetime(date_keys['full_date']).dt.date
+            date_keys['full_date'] = pd.to_datetime(
+                date_keys['full_date']).dt.date
         except Exception as e:
             logger.error(f"Error processing dates: {e}")
             return False
@@ -644,16 +669,11 @@ def load_fact_inventory(db, inventory_df, batch_size=1000):
             return False
 
         try:
-            fact_df['last_updated_dt'] = pd.to_datetime(
-                fact_df['last_updated'])
-            fact_df['inventory_id'] = (
-                fact_df['product_id'].astype(str) + '_' +
-                fact_df['store_id'].astype(str) + '_' +
-                fact_df['last_updated_dt'].dt.strftime('%Y%m%d%H%M%S')
-            )
+            # inventory_id was already created earlier, no need to recreate
 
             if fact_df.empty:
-                logger.info("No new valid inventory records to load after dimension key lookup.")
+                logger.info(
+                    "No new valid inventory records to load after dimension key lookup.")
                 return True
 
         except Exception as e:
@@ -700,9 +720,9 @@ def load_fact_inventory(db, inventory_df, batch_size=1000):
                         method=None
                     )
                     total_loaded += len(batch)
-                    if (i // actual_batch_size + 1) % 10 == 0:
-                        logger.info(
-                            f"Loaded {total_loaded}/{len(fact_df)} inventory records...")
+                    if (i // actual_batch_size + 1) % 20 == 0:  # Reduced frequency
+                        print(
+                            f"  Loading inventory: {total_loaded}/{len(fact_df)} records...")
                 except Exception as batch_error:
                     logger.error(
                         f"Error loading inventory batch {i//actual_batch_size + 1}: {batch_error}")
@@ -723,8 +743,7 @@ def load_fact_inventory(db, inventory_df, batch_size=1000):
                                 f"Failed to insert individual inventory record: {row['inventory_id']} - {row_error}")
                             continue
 
-            logger.info(
-                f"Successfully loaded {total_loaded} new inventory records.")
+            print(f"  ✅ Loaded {total_loaded} new inventory records")
             return True
         except Exception as e:
             logger.error(f"Error loading fact inventory data: {e}")
@@ -740,7 +759,7 @@ def load_fact_inventory(db, inventory_df, batch_size=1000):
 
 def load_data_to_warehouse(transformed_data):
 
-    logger.info("Starting data warehouse loading...")
+    print("Loading data to warehouse...")
 
     if not transformed_data:
         logger.error("No transformed data provided")
@@ -753,7 +772,6 @@ def load_data_to_warehouse(transformed_data):
             return False
 
         db.connect()
-        logger.info("Connected to warehouse database")
 
         if not create_warehouse_tables(db):
             logger.error("Failed to create warehouse tables")
@@ -771,26 +789,19 @@ def load_data_to_warehouse(transformed_data):
 
         for data_key, table_name, key_column in dimension_tables:
             if data_key in transformed_data:
-                logger.info(f"Loading {data_key} data...")
                 if not load_dimension_table(db, transformed_data[data_key], table_name, key_column):
                     logger.error(f"Failed to load {data_key} data")
                     return False
-            else:
-                logger.warning(f"No {data_key} data found in transformed_data")
 
+        # Handle promotions
         if 'promotions' in transformed_data and transformed_data['promotions'] is not None and not transformed_data['promotions'].empty:
-            logger.info("Loading promotions data...")
             if not load_dimension_table(db, transformed_data['promotions'], 'dimpromotion', 'promotion_key'):
                 logger.error("Failed to load promotions data")
                 return False
         else:
-            logger.warning(
-                "No promotions data found, ensuring default promotion exists...")
-
             existing_promos = db.run_query(
                 "SELECT COUNT(*) as count FROM dimpromotion")
             if existing_promos is None or existing_promos['count'].iloc[0] == 0:
-                logger.info("Creating default promotion record...")
                 default_promotion_data = pd.DataFrame([{
                     'promotion_name': 'No Promotion',
                     'type': 'None',
@@ -803,22 +814,16 @@ def load_data_to_warehouse(transformed_data):
         logger.info("Loading fact tables...")
 
         if 'sales' in transformed_data:
-            logger.info("Loading sales fact data...")
             if not load_fact_sales(db, transformed_data['sales']):
                 logger.error("Failed to load sales fact data")
                 return False
-        else:
-            logger.warning("No sales data found in transformed_data")
 
         if 'inventory' in transformed_data:
-            logger.info("Loading inventory fact data...")
             if not load_fact_inventory(db, transformed_data['inventory']):
                 logger.error("Failed to load inventory fact data")
                 return False
-        else:
-            logger.warning("No inventory data found in transformed_data")
 
-        logger.info("Data warehouse loading completed successfully!")
+        logger.info("✅ Data warehouse loading completed successfully!")
         return True
 
     except Exception as e:
@@ -841,9 +846,10 @@ def run_loading(transformed_data):
         if result:
             logger.info("ETL loading process completed successfully")
         else:
-            logger.error("ETL loading process failed")
+            raise LoadingError("Loading process returned False", "LOAD002")
         return result
+    except LoadingError:
+        raise
     except Exception as e:
-        logger.error(f"Critical error in run_loading: {str(e)}")
-        logger.error(traceback.format_exc())
-        return False
+        raise LoadingError(
+            f"Critical error in run_loading: {str(e)}", "LOAD003")
