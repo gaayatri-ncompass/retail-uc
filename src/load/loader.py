@@ -1,4 +1,5 @@
 import pandas as pd
+pd.set_option('future.no_silent_downcasting', True)
 import traceback
 import logging
 from sqlalchemy import text
@@ -14,8 +15,8 @@ def create_warehouse_tables(db):
     """Create warehouse tables with improved error handling"""
 
     warehouse_tables = {
-        'DimCustomer': '''
-            CREATE TABLE IF NOT EXISTS DimCustomer (
+        'dimcustomer': '''
+            CREATE TABLE IF NOT EXISTS dimcustomer (
                 customer_key INT AUTO_INCREMENT PRIMARY KEY,
                 customer_id VARCHAR(255) UNIQUE,
                 customer_name VARCHAR(255),
@@ -27,8 +28,8 @@ def create_warehouse_tables(db):
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             )
         ''',
-        'DimProduct': '''
-            CREATE TABLE IF NOT EXISTS DimProduct (
+        'dimproduct': '''
+            CREATE TABLE IF NOT EXISTS dimproduct (
                 product_key INT AUTO_INCREMENT PRIMARY KEY,
                 product_id VARCHAR(255) UNIQUE,
                 product_name VARCHAR(255),
@@ -38,8 +39,8 @@ def create_warehouse_tables(db):
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             )
         ''',
-        'DimStore': '''
-            CREATE TABLE IF NOT EXISTS DimStore (
+        'dimstore': '''
+            CREATE TABLE IF NOT EXISTS dimstore (
                 store_key INT AUTO_INCREMENT PRIMARY KEY,
                 store_id VARCHAR(255) UNIQUE,
                 store_name VARCHAR(255),
@@ -49,8 +50,8 @@ def create_warehouse_tables(db):
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             )
         ''',
-        'DimSupplier': '''
-            CREATE TABLE IF NOT EXISTS DimSupplier (
+        'dimsupplier': '''
+            CREATE TABLE IF NOT EXISTS dimsupplier (
                 supplier_key INT AUTO_INCREMENT PRIMARY KEY,
                 supplier_id VARCHAR(255) UNIQUE,
                 supplier_name VARCHAR(255),
@@ -60,8 +61,8 @@ def create_warehouse_tables(db):
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             )
         ''',
-        'DimDate': '''
-            CREATE TABLE IF NOT EXISTS DimDate (
+        'dimdate': '''
+            CREATE TABLE IF NOT EXISTS dimdate (
                 date_key INT PRIMARY KEY,
                 full_date DATE,
                 year INT,
@@ -71,8 +72,8 @@ def create_warehouse_tables(db):
                 day INT
             )
         ''',
-        'DimPromotion': '''
-            CREATE TABLE IF NOT EXISTS DimPromotion (
+        'dimpromotion': '''
+            CREATE TABLE IF NOT EXISTS dimpromotion (
                 promotion_key INT AUTO_INCREMENT PRIMARY KEY,
                 promotion_name VARCHAR(255),
                 type VARCHAR(100),
@@ -80,8 +81,8 @@ def create_warehouse_tables(db):
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''',
-        'FactSales': '''
-            CREATE TABLE IF NOT EXISTS FactSales (
+        'factsales': '''
+            CREATE TABLE IF NOT EXISTS factsales (
                 sale_key INT AUTO_INCREMENT PRIMARY KEY,
                 sale_id VARCHAR(255) UNIQUE,
                 customer_key INT,
@@ -94,15 +95,15 @@ def create_warehouse_tables(db):
                 payment_type VARCHAR(100),
                 channel VARCHAR(100),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (customer_key) REFERENCES DimCustomer(customer_key),
-                FOREIGN KEY (product_key) REFERENCES DimProduct(product_key),
-                FOREIGN KEY (store_key) REFERENCES DimStore(store_key),
-                FOREIGN KEY (date_key) REFERENCES DimDate(date_key),
-                FOREIGN KEY (promotion_key) REFERENCES DimPromotion(promotion_key)
+                FOREIGN KEY (customer_key) REFERENCES dimcustomer(customer_key),
+                FOREIGN KEY (product_key) REFERENCES dimproduct(product_key),
+                FOREIGN KEY (store_key) REFERENCES dimstore(store_key),
+                FOREIGN KEY (date_key) REFERENCES dimdate(date_key),
+                FOREIGN KEY (promotion_key) REFERENCES dimpromotion(promotion_key)
             )
         ''',
-        'FactInventorySnapshot': '''
-            CREATE TABLE IF NOT EXISTS FactInventorySnapshot (
+        'factinventorysnapshot': '''
+            CREATE TABLE IF NOT EXISTS factinventorysnapshot (
                 inventory_snapshot_key INT AUTO_INCREMENT PRIMARY KEY,
                 inventory_id VARCHAR(255) UNIQUE,
                 product_key INT,
@@ -111,10 +112,10 @@ def create_warehouse_tables(db):
                 supplier_key INT,
                 stock_level INT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (product_key) REFERENCES DimProduct(product_key),
-                FOREIGN KEY (store_key) REFERENCES DimStore(store_key),
-                FOREIGN KEY (date_key) REFERENCES DimDate(date_key),
-                FOREIGN KEY (supplier_key) REFERENCES DimSupplier(supplier_key)
+                FOREIGN KEY (product_key) REFERENCES dimproduct(product_key),
+                FOREIGN KEY (store_key) REFERENCES dimstore(store_key),
+                FOREIGN KEY (date_key) REFERENCES dimdate(date_key),
+                FOREIGN KEY (supplier_key) REFERENCES dimsupplier(supplier_key)
             )
         '''
     }
@@ -192,7 +193,8 @@ def load_dimension_table(db, df, table_name, key_column, batch_size=1000):
 
                 new_batch = new_batch.copy()
 
-                new_batch = new_batch.fillna('')
+                object_cols = new_batch.select_dtypes(include=['object']).columns
+                new_batch[object_cols] = new_batch[object_cols].fillna('').infer_objects(copy=False)
 
                 small_batch_size = min(len(new_batch), 50)
 
@@ -264,12 +266,12 @@ def load_fact_sales(db, sales_df, batch_size=1000):
 
         try:
             customer_keys = db.run_query(
-                "SELECT customer_key, customer_id FROM DimCustomer")
+                "SELECT customer_key, customer_id FROM dimcustomer")
             product_keys = db.run_query(
-                "SELECT product_key, product_id FROM DimProduct")
+                "SELECT product_key, product_id FROM dimproduct")
             store_keys = db.run_query(
-                "SELECT store_key, store_id FROM DimStore")
-            date_keys = db.run_query("SELECT date_key, full_date FROM DimDate")
+                "SELECT store_key, store_id FROM dimstore")
+            date_keys = db.run_query("SELECT date_key, full_date FROM dimdate")
 
             if any(df is None or df.empty for df in [customer_keys, product_keys, store_keys, date_keys]):
                 logger.error(
@@ -282,7 +284,7 @@ def load_fact_sales(db, sales_df, batch_size=1000):
 
         try:
             promo_key_df = db.run_query(
-                "SELECT promotion_key FROM DimPromotion LIMIT 1")
+                "SELECT promotion_key FROM dimpromotion LIMIT 1")
             if promo_key_df is not None and not promo_key_df.empty:
                 default_promotion_key = promo_key_df['promotion_key'].iloc[0]
                 logger.info(
@@ -297,7 +299,7 @@ def load_fact_sales(db, sales_df, batch_size=1000):
                     'discount': 0.00
                 }])
                 default_promotion_data.to_sql(
-                    name='DimPromotion',
+                    name='dimpromotion',
                     con=db.engine,
                     if_exists='append',
                     index=False,
@@ -305,7 +307,7 @@ def load_fact_sales(db, sales_df, batch_size=1000):
                 )
 
                 promo_key_df = db.run_query(
-                    "SELECT promotion_key FROM DimPromotion WHERE promotion_name = 'No Promotion' LIMIT 1")
+                    "SELECT promotion_key FROM dimpromotion WHERE promotion_name = 'No Promotion' LIMIT 1")
                 default_promotion_key = promo_key_df['promotion_key'].iloc[0]
                 logger.info(
                     f"Created default promotion with key: {default_promotion_key}")
@@ -315,7 +317,7 @@ def load_fact_sales(db, sales_df, batch_size=1000):
 
         try:
             # Get the most recent sale date from the warehouse using the date_key
-            max_date_query = "SELECT MAX(d.full_date) as max_date FROM FactSales fs JOIN DimDate d ON fs.date_key = d.date_key"
+            max_date_query = "SELECT MAX(d.full_date) as max_date FROM factsales fs JOIN dimdate d ON fs.date_key = d.date_key"
             max_date_df = db.run_query(max_date_query)
             last_processed_date = None
             if max_date_df is not None and not max_date_df.empty and pd.notna(max_date_df['max_date'].iloc[0]):
@@ -433,10 +435,10 @@ def load_fact_sales(db, sales_df, batch_size=1000):
                 fact_df = fact_df[fact_df['date_key'].isin(valid_dates)]
 
             promo_check = db.run_query(
-                f"SELECT COUNT(*) as count FROM DimPromotion WHERE promotion_key = {default_promotion_key}")
+                f"SELECT COUNT(*) as count FROM dimpromotion WHERE promotion_key = {default_promotion_key}")
             if promo_check is None or promo_check['count'].iloc[0] == 0:
                 logger.error(
-                    f"Promotion key {default_promotion_key} does not exist in DimPromotion table")
+                    f"Promotion key {default_promotion_key} does not exist in dimpromotion table")
                 return False
 
             if fact_df.empty:
@@ -488,7 +490,7 @@ def load_fact_sales(db, sales_df, batch_size=1000):
                 batch = fact_df.iloc[i:i+actual_batch_size]
                 try:
                     batch.to_sql(
-                        name='FactSales',
+                        name='factsales',
                         con=db.engine,
                         if_exists='append',
                         index=False,
@@ -506,7 +508,7 @@ def load_fact_sales(db, sales_df, batch_size=1000):
                         try:
                             row_df = pd.DataFrame([row])
                             row_df.to_sql(
-                                name='FactSales',
+                                name='factsales',
                                 con=db.engine,
                                 if_exists='append',
                                 index=False,
@@ -561,12 +563,12 @@ def load_fact_inventory(db, inventory_df, batch_size=1000):
 
         try:
             product_keys = db.run_query(
-                "SELECT product_key, product_id FROM DimProduct")
+                "SELECT product_key, product_id FROM dimproduct")
             store_keys = db.run_query(
-                "SELECT store_key, store_id FROM DimStore")
-            date_keys = db.run_query("SELECT date_key, full_date FROM DimDate")
+                "SELECT store_key, store_id FROM dimstore")
+            date_keys = db.run_query("SELECT date_key, full_date FROM dimdate")
             supplier_keys = db.run_query(
-                "SELECT supplier_key, supplier_id FROM DimSupplier")
+                "SELECT supplier_key, supplier_id FROM dimsupplier")
 
             if any(df is None or df.empty for df in [product_keys, store_keys, date_keys, supplier_keys]):
                 logger.error(
@@ -579,7 +581,7 @@ def load_fact_inventory(db, inventory_df, batch_size=1000):
 
         try:
             # Get the most recent inventory snapshot date from the warehouse
-            max_date_query = "SELECT MAX(d.full_date) as max_date FROM FactInventorySnapshot fis JOIN DimDate d ON fis.date_key = d.date_key"
+            max_date_query = "SELECT MAX(d.full_date) as max_date FROM factinventorysnapshot fis JOIN dimdate d ON fis.date_key = d.date_key"
             max_date_df = db.run_query(max_date_query)
             last_processed_date = None
             if max_date_df is not None and not max_date_df.empty and pd.notna(max_date_df['max_date'].iloc[0]):
@@ -691,7 +693,7 @@ def load_fact_inventory(db, inventory_df, batch_size=1000):
                 batch = fact_df.iloc[i:i+actual_batch_size]
                 try:
                     batch.to_sql(
-                        name='FactInventorySnapshot',
+                        name='factinventorysnapshot',
                         con=db.engine,
                         if_exists='append',
                         index=False,
@@ -760,11 +762,11 @@ def load_data_to_warehouse(transformed_data):
         logger.info("Loading dimension tables...")
 
         dimension_tables = [
-            ('customers', 'DimCustomer', 'customer_id'),
-            ('products', 'DimProduct', 'product_id'),
-            ('stores', 'DimStore', 'store_id'),
-            ('suppliers', 'DimSupplier', 'supplier_id'),
-            ('dates', 'DimDate', 'date_key')
+            ('customers', 'dimcustomer', 'customer_id'),
+            ('products', 'dimproduct', 'product_id'),
+            ('stores', 'dimstore', 'store_id'),
+            ('suppliers', 'dimsupplier', 'supplier_id'),
+            ('dates', 'dimdate', 'date_key')
         ]
 
         for data_key, table_name, key_column in dimension_tables:
@@ -778,7 +780,7 @@ def load_data_to_warehouse(transformed_data):
 
         if 'promotions' in transformed_data and transformed_data['promotions'] is not None and not transformed_data['promotions'].empty:
             logger.info("Loading promotions data...")
-            if not load_dimension_table(db, transformed_data['promotions'], 'DimPromotion', 'promotion_key'):
+            if not load_dimension_table(db, transformed_data['promotions'], 'dimpromotion', 'promotion_key'):
                 logger.error("Failed to load promotions data")
                 return False
         else:
@@ -786,7 +788,7 @@ def load_data_to_warehouse(transformed_data):
                 "No promotions data found, ensuring default promotion exists...")
 
             existing_promos = db.run_query(
-                "SELECT COUNT(*) as count FROM DimPromotion")
+                "SELECT COUNT(*) as count FROM dimpromotion")
             if existing_promos is None or existing_promos['count'].iloc[0] == 0:
                 logger.info("Creating default promotion record...")
                 default_promotion_data = pd.DataFrame([{
@@ -794,7 +796,7 @@ def load_data_to_warehouse(transformed_data):
                     'type': 'None',
                     'discount': 0.00
                 }])
-                if not load_dimension_table(db, default_promotion_data, 'DimPromotion', 'promotion_name'):
+                if not load_dimension_table(db, default_promotion_data, 'dimpromotion', 'promotion_name'):
                     logger.error("Failed to create default promotion")
                     return False
 

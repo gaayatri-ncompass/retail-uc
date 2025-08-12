@@ -11,12 +11,10 @@ def clean_customer_data(df):
 
     df = df.drop_duplicates(subset=['customer_id'])
 
-    df['email'] = df['email'].str.lower().str.strip()
-
-    df['phone'] = df['phone'].str.replace(r'[^\d+]', '', regex=True)
-
-    df['address'] = df['address'].str.strip()
-    df['signup_date'] = pd.to_datetime(df['signup_date'], errors='coerce')
+    df.loc[:, 'email'] = df['email'].str.lower().str.strip()
+    df.loc[:, 'phone'] = df['phone'].str.replace(r'[^\d+]', '', regex=True)
+    df.loc[:, 'address'] = df['address'].str.strip()
+    df.loc[:, 'signup_date'] = pd.to_datetime(df['signup_date'], errors='coerce')
 
     df = df.dropna(subset=['signup_date'])
 
@@ -30,11 +28,9 @@ def clean_product_data(df):
 
     df = df.drop_duplicates(subset=['product_id'])
 
-    df['product_name'] = df['product_name'].str.strip()
-
-    df['category'] = df['category'].str.strip()
-
-    df['price'] = pd.to_numeric(df['price'], errors='coerce')
+    df.loc[:, 'product_name'] = df['product_name'].str.strip()
+    df.loc[:, 'category'] = df['category'].str.strip()
+    df.loc[:, 'price'] = pd.to_numeric(df['price'], errors='coerce')
 
     df = df.dropna(subset=['price'])
 
@@ -48,9 +44,8 @@ def clean_store_data(df):
 
     df = df.drop_duplicates(subset=['store_id'])
 
-    df['store_name'] = df['store_name'].str.strip()
-
-    df['location'] = df['location'].str.strip()
+    df.loc[:, 'store_name'] = df['store_name'].str.strip()
+    df.loc[:, 'location'] = df['location'].str.strip()
 
     return df
 
@@ -62,9 +57,8 @@ def clean_supplier_data(df):
 
     df = df.drop_duplicates(subset=['supplier_id'])
 
-    df['supplier_name'] = df['supplier_name'].str.strip()
-
-    df['contact_name'] = df['contact_name'].str.strip()
+    df.loc[:, 'supplier_name'] = df['supplier_name'].str.strip()
+    df.loc[:, 'contact_name'] = df['contact_name'].str.strip()
 
     return df
 
@@ -76,16 +70,14 @@ def clean_sales_data(df):
 
     df = df.drop_duplicates(subset=['sale_id'])
 
-    df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce')
-
-    df['total_amount'] = pd.to_numeric(df['total_amount'], errors='coerce')
-
-    df['sale_date'] = pd.to_datetime(df['sale_date'], errors='coerce')
+    df.loc[:, 'quantity'] = pd.to_numeric(df['quantity'], errors='coerce')
+    df.loc[:, 'total_amount'] = pd.to_numeric(df['total_amount'], errors='coerce')
+    df.loc[:, 'sale_date'] = pd.to_datetime(df['sale_date'], errors='coerce')
 
     df = df.dropna(subset=['quantity', 'total_amount', 'sale_date'])
 
-    df['payment_type'] = 'Credit Card'
-    df['channel'] = 'In-Store'
+    df.loc[:, 'payment_type'] = 'Credit Card'
+    df.loc[:, 'channel'] = 'In-Store'
 
     return df
 
@@ -97,9 +89,8 @@ def clean_inventory_data(df):
 
     df = df.drop_duplicates(subset=['product_id', 'store_id', 'last_updated'])
 
-    df['stock_level'] = pd.to_numeric(df['stock_level'], errors='coerce')
-
-    df['last_updated'] = pd.to_datetime(df['last_updated'], errors='coerce')
+    df.loc[:, 'stock_level'] = pd.to_numeric(df['stock_level'], errors='coerce')
+    df.loc[:, 'last_updated'] = pd.to_datetime(df['last_updated'], errors='coerce')
 
     df = df.dropna(subset=['stock_level', 'last_updated'])
 
