@@ -2,7 +2,7 @@
 
 Extract, Transform, Load (ETL) pipeline for retail sales data with incremental loading capabilities and automated data generation.
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 RetailSales_UseCase/
@@ -64,7 +64,7 @@ RetailSales_UseCase/
 - `factsales` - Sales transactions
 - `factinventorysnapshot` - Inventory levels
 
-## Key Implemented features
+## Key Implemented Features
 
 - **Incremental Loading**: Only processes new data on subsequent runs
 - **Data Validation**: Comprehensive validation using Cerberus
@@ -73,49 +73,65 @@ RetailSales_UseCase/
 - **Automated Data Generation**: Continuous fake data creation for testing
 - **Batch Processing**: Efficient data loading in configurable batches
 
-# Reset and create all tables
+## Getting Started
 
+### 1. Database Initialization
+
+Reset and create all tables:
+
+```bash
 python reset_tables.py
+```
 
-### . Run Initial ETL Load
+### 2. Run Initial ETL Load
 
-# Full ETL pipeline execution
+Execute the full ETL pipeline:
 
+```bash
 python main.py
+```
 
-### Generate New Data
+### 3. Generate New Data
 
-# Start continuous data generation
+Start continuous data generation:
 
+```bash
 cd fake_data_generator
 node index.js
+```
 
+## Usage Examples
+
+### Manual ETL Execution
+
+```bash
 # Run complete ETL pipeline
-
 python main.py
 
 # Reset all tables and metadata
-
 python reset_tables.py
 
 # Run with scheduling (every 30 minutes)
-
 python run_scheduler.py
+```
 
 ### Data Generation
 
+```bash
 cd fake_data_generator
 node index.js
 
 # The generator creates:
-
 # - New customers, products, stores
-
 # - Sales transactions
-
 # - Inventory updates
+```
 
-# Run predefined analytics queries
+### Analytics Queries
 
-Cd analytics
-python run_analytics()
+Run predefined analytics queries:
+
+```bash
+cd src/analytics
+python analytics.py
+```
