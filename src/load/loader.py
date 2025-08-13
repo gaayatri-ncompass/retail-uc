@@ -136,7 +136,6 @@ def create_warehouse_tables(db):
 def load_dimension_table(db, df, table_name, key_column, batch_size=1000):
 
     try:
-
         if df is None:
             logger.warning(
                 f"No data to load for {table_name} (DataFrame is None)")
@@ -155,77 +154,68 @@ def load_dimension_table(db, df, table_name, key_column, batch_size=1000):
             logger.error(f"Available columns: {list(df.columns)}")
             return False
 
+        try:
+            if key_column == 'date_key':
+
+                latest_query = f"SELECT MAX({key_column}) as latest_value FROM {table_name}"
+            else:
+
+                latest_query = f"SELECT {key_column} as latest_value FROM {table_name} ORDER BY {key_column} DESC LIMIT 1"
+
+            latest_result = db.run_query(latest_query)
+
+            if latest_result is not None and not latest_result.empty and latest_result['latest_value'].iloc[0] is not None:
+                latest_value = latest_result['latest_value'].iloc[0]
+                logger.info(
+                    f"Found latest {key_column} in {table_name}: {latest_value}")
+
+                if key_column == 'date_key':
+
+                    filtered_df = df[df[key_column] > latest_value]
+                else:
+
+                    filtered_df = df[df[key_column] > str(latest_value)]
+
+                logger.info(
+                    f"Filtered {table_name} from {len(df)} to {len(filtered_df)} records (only new data)")
+                df = filtered_df
+            else:
+                logger.info(
+                    f"No existing data in {table_name}, loading all {len(df)} records")
+
+        except Exception as e:
+            logger.warning(
+                f"Could not get latest value from {table_name}, loading all data: {e}")
+
+        if df.empty:
+            logger.info(f"No new records to load for {table_name}")
+            return True
+
+        # Load the filtered data
         total_loaded = 0
         for i in range(0, len(df), batch_size):
             batch = df.iloc[i:i+batch_size]
 
-            existing_keys = []
-            if not batch.empty:
-                try:
-                    key_values = batch[key_column].tolist()
-
-                    key_values = [
-                        str(val) for val in key_values if val is not None and pd.notna(val)]
-
-                    if key_values:
-                        quoted_values = ','.join(
-                            [f"'{val}'" for val in key_values])
-                        check_query = f"SELECT {key_column} FROM {table_name} WHERE {key_column} IN ({quoted_values})"
-
-                        existing_df = db.run_query(check_query)
-                        if existing_df is not None and not existing_df.empty:
-                            existing_keys = existing_df[key_column].tolist()
-                except Exception as e:
-                    logger.error(
-                        f"Error checking existing records for batch {i//batch_size + 1}: {e}")
-                    continue
-
-            new_batch = batch[~batch[key_column].isin(existing_keys)]
-
-            if new_batch.empty:
-                continue  # Skip logging for empty batches
-
             try:
-
-                new_batch = new_batch.copy()
-
-                object_cols = new_batch.select_dtypes(
-                    include=['object']).columns
-                new_batch[object_cols] = new_batch[object_cols].fillna(
+                batch = batch.copy()
+                object_cols = batch.select_dtypes(include=['object']).columns
+                batch[object_cols] = batch[object_cols].fillna(
                     '').infer_objects(copy=False)
 
-                small_batch_size = min(len(new_batch), 50)
+                # Insert the entire batch at once
+                batch.to_sql(
+                    name=table_name,
+                    con=db.engine,
+                    if_exists='append',
+                    index=False,
+                    method=None
+                )
 
-                for j in range(0, len(new_batch), small_batch_size):
-                    mini_batch = new_batch.iloc[j:j+small_batch_size]
-                    mini_batch.to_sql(
-                        name=table_name,
-                        con=db.engine,
-                        if_exists='append',
-                        index=False,
-                        method=None
-                    )
-
-                total_loaded += len(new_batch)  # Add to total
+                total_loaded += len(batch)
             except Exception as e:
                 logger.error(
                     f"Error inserting batch {i//batch_size + 1} into {table_name}: {e}")
-
-                for idx, row in new_batch.iterrows():
-                    try:
-                        row_df = pd.DataFrame([row])
-                        row_df = row_df.fillna('')
-                        row_df.to_sql(
-                            name=table_name,
-                            con=db.engine,
-                            if_exists='append',
-                            index=False,
-                            method=None
-                        )
-                    except Exception as row_error:
-                        logger.error(
-                            f"Failed to insert individual record for {key_column}={row[key_column]}: {row_error}")
-                        continue
+                continue
 
         # Summary message
         if total_loaded > 0:
@@ -318,30 +308,30 @@ def load_fact_sales(db, sales_df, batch_size=1000):
             return False
 
         try:
-            # Get existing sale IDs from warehouse for incremental loading
-            existing_sales_query = "SELECT sale_id FROM factsales"
-            existing_sales_df = db.run_query(existing_sales_query)
-            existing_sale_ids = set()
-            if existing_sales_df is not None and not existing_sales_df.empty:
-                existing_sale_ids = set(existing_sales_df['sale_id'].tolist())
+            # Get latest sale_id from warehouse for simple incremental loading
+            latest_query = "SELECT sale_id FROM factsales ORDER BY sale_id DESC LIMIT 1"
+            latest_result = db.run_query(latest_query)
+
+            if latest_result is not None and not latest_result.empty:
+                latest_sale_id = latest_result['sale_id'].iloc[0]
                 logger.info(
-                    f"Found {len(existing_sale_ids)} existing sales in warehouse")
+                    f"Found latest sale_id in warehouse: {latest_sale_id}")
+
+                # Filter to only include sales after the latest one
+                initial_count = len(sales_df)
+                sales_df = sales_df[sales_df['sale_id'] > latest_sale_id]
+                logger.info(
+                    f"Filtered sales data from {initial_count} to {len(sales_df)} records (only new data)")
+            else:
+                logger.info(
+                    "No existing sales in warehouse, loading all sales data")
         except Exception as e:
             logger.warning(
-                f"Could not get existing sale IDs, proceeding with full load: {e}")
-            existing_sale_ids = set()
+                f"Could not get latest sale_id, proceeding with full load: {e}")
 
         try:
             sales_df = sales_df.copy()
             sales_df['sale_date_dt'] = pd.to_datetime(sales_df['sale_date'])
-
-            # Filter for new sales records based on sale_id (not date)
-            if existing_sale_ids:
-                initial_count = len(sales_df)
-                sales_df = sales_df[~sales_df['sale_id'].isin(
-                    existing_sale_ids)]
-                logger.info(
-                    f"Filtered sales data from {initial_count} to {len(sales_df)} records based on sale_id check.")
 
             if sales_df.empty:
                 logger.info(
@@ -590,40 +580,56 @@ def load_fact_inventory(db, inventory_df, batch_size=1000):
             return False
 
         try:
-            # Get existing inventory IDs from warehouse for incremental loading
-            existing_inventory_query = "SELECT inventory_id FROM factinventorysnapshot"
-            existing_inventory_df = db.run_query(existing_inventory_query)
-            existing_inventory_ids = set()
-            if existing_inventory_df is not None and not existing_inventory_df.empty:
-                existing_inventory_ids = set(
-                    existing_inventory_df['inventory_id'].tolist())
-                logger.info(
-                    f"Found {len(existing_inventory_ids)} existing inventory records in warehouse")
-        except Exception as e:
-            logger.warning(
-                f"Could not get existing inventory IDs, proceeding with full load: {e}")
-            existing_inventory_ids = set()
-
-        try:
+            # First, process dates and create the datetime column
             inventory_df = inventory_df.copy()
             inventory_df['last_updated_dt'] = pd.to_datetime(
                 inventory_df['last_updated'])
 
-            # Create inventory_id first for comparison
+            # Get latest inventory_id from warehouse for simple incremental loading
+            latest_query = "SELECT inventory_id FROM factinventorysnapshot ORDER BY inventory_id DESC LIMIT 1"
+            latest_result = db.run_query(latest_query)
+
+            if latest_result is not None and not latest_result.empty:
+                latest_inventory_id = latest_result['inventory_id'].iloc[0]
+                logger.info(
+                    f"Found latest inventory_id in warehouse: {latest_inventory_id}")
+
+                # Create inventory_id first for comparison
+                inventory_df['inventory_id'] = (
+                    inventory_df['product_id'].astype(str) + '_' +
+                    inventory_df['store_id'].astype(str) + '_' +
+                    inventory_df['last_updated_dt'].dt.strftime('%Y%m%d%H%M%S')
+                )
+
+                # Filter to only include inventory after the latest one
+                initial_count = len(inventory_df)
+                inventory_df = inventory_df[inventory_df['inventory_id']
+                                            > latest_inventory_id]
+                logger.info(
+                    f"Filtered inventory data from {initial_count} to {len(inventory_df)} records (only new data)")
+            else:
+                logger.info(
+                    "No existing inventory in warehouse, loading all inventory data")
+                # Create inventory_id for new records
+                inventory_df['inventory_id'] = (
+                    inventory_df['product_id'].astype(str) + '_' +
+                    inventory_df['store_id'].astype(str) + '_' +
+                    inventory_df['last_updated_dt'].dt.strftime('%Y%m%d%H%M%S')
+                )
+        except Exception as e:
+            logger.warning(
+                f"Could not get latest inventory_id, proceeding with full load: {e}")
+            # Ensure we have the datetime column and inventory_id as fallback
+            if 'last_updated_dt' not in inventory_df.columns:
+                inventory_df['last_updated_dt'] = pd.to_datetime(
+                    inventory_df['last_updated'])
             inventory_df['inventory_id'] = (
                 inventory_df['product_id'].astype(str) + '_' +
                 inventory_df['store_id'].astype(str) + '_' +
                 inventory_df['last_updated_dt'].dt.strftime('%Y%m%d%H%M%S')
             )
 
-            # Filter for new inventory records based on inventory_id
-            if existing_inventory_ids:
-                initial_count = len(inventory_df)
-                inventory_df = inventory_df[~inventory_df['inventory_id'].isin(
-                    existing_inventory_ids)]
-                logger.info(
-                    f"Filtered inventory data from {initial_count} to {len(inventory_df)} records based on inventory_id check.")
-
+        try:
             if inventory_df.empty:
                 logger.info(
                     "No new inventory records to process after incremental filtering.")
@@ -669,15 +675,12 @@ def load_fact_inventory(db, inventory_df, batch_size=1000):
             return False
 
         try:
-            # inventory_id was already created earlier, no need to recreate
-
             if fact_df.empty:
                 logger.info(
                     "No new valid inventory records to load after dimension key lookup.")
                 return True
-
         except Exception as e:
-            logger.error(f"Error creating inventory IDs: {e}")
+            logger.error(f"Error validating inventory records: {e}")
             return False
 
         try:
