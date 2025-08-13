@@ -191,7 +191,6 @@ def load_dimension_table(db, df, table_name, key_column, batch_size=1000):
             logger.info(f"No new records to load for {table_name}")
             return True
 
-        # Load the filtered data
         total_loaded = 0
         for i in range(0, len(df), batch_size):
             batch = df.iloc[i:i+batch_size]
@@ -202,7 +201,6 @@ def load_dimension_table(db, df, table_name, key_column, batch_size=1000):
                 batch[object_cols] = batch[object_cols].fillna(
                     '').infer_objects(copy=False)
 
-                # Insert the entire batch at once
                 batch.to_sql(
                     name=table_name,
                     con=db.engine,
@@ -217,7 +215,6 @@ def load_dimension_table(db, df, table_name, key_column, batch_size=1000):
                     f"Error inserting batch {i//batch_size + 1} into {table_name}: {e}")
                 continue
 
-        # Summary message
         if total_loaded > 0:
             logger.info(
                 f"Successfully loaded {total_loaded} new records into {table_name}")
@@ -308,7 +305,7 @@ def load_fact_sales(db, sales_df, batch_size=1000):
             return False
 
         try:
-            # Get latest sale_id from warehouse for simple incremental loading
+
             latest_query = "SELECT sale_id FROM factsales ORDER BY sale_id DESC LIMIT 1"
             latest_result = db.run_query(latest_query)
 
@@ -317,7 +314,6 @@ def load_fact_sales(db, sales_df, batch_size=1000):
                 logger.info(
                     f"Found latest sale_id in warehouse: {latest_sale_id}")
 
-                # Filter to only include sales after the latest one
                 initial_count = len(sales_df)
                 sales_df = sales_df[sales_df['sale_id'] > latest_sale_id]
                 logger.info(
@@ -399,8 +395,6 @@ def load_fact_sales(db, sales_df, batch_size=1000):
             fact_df['promotion_key'] = default_promotion_key
             key_cols = ['customer_key', 'product_key',
                         'store_key', 'date_key', 'promotion_key']
-
-            logger.info("Validating foreign key relationships...")
 
             valid_customers = set(customer_keys['customer_key'].tolist())
             invalid_customers = fact_df[~fact_df['customer_key'].isin(
@@ -496,7 +490,7 @@ def load_fact_sales(db, sales_df, batch_size=1000):
                         method=None
                     )
                     total_loaded += len(batch)
-                    # Show progress every 10 batches
+
                     if (i // actual_batch_size + 1) % 10 == 0:
                         logger.info(
                             f"Loaded {total_loaded}/{len(fact_df)} sales records...")
@@ -536,7 +530,6 @@ def load_fact_sales(db, sales_df, batch_size=1000):
 
 
 def load_fact_inventory(db, inventory_df, batch_size=1000):
-    """Load fact inventory table with improved error handling"""
 
     try:
 
@@ -580,12 +573,11 @@ def load_fact_inventory(db, inventory_df, batch_size=1000):
             return False
 
         try:
-            # First, process dates and create the datetime column
+
             inventory_df = inventory_df.copy()
             inventory_df['last_updated_dt'] = pd.to_datetime(
                 inventory_df['last_updated'])
 
-            # Get latest inventory_id from warehouse for simple incremental loading
             latest_query = "SELECT inventory_id FROM factinventorysnapshot ORDER BY inventory_id DESC LIMIT 1"
             latest_result = db.run_query(latest_query)
 
@@ -594,14 +586,12 @@ def load_fact_inventory(db, inventory_df, batch_size=1000):
                 logger.info(
                     f"Found latest inventory_id in warehouse: {latest_inventory_id}")
 
-                # Create inventory_id first for comparison
                 inventory_df['inventory_id'] = (
                     inventory_df['product_id'].astype(str) + '_' +
                     inventory_df['store_id'].astype(str) + '_' +
                     inventory_df['last_updated_dt'].dt.strftime('%Y%m%d%H%M%S')
                 )
 
-                # Filter to only include inventory after the latest one
                 initial_count = len(inventory_df)
                 inventory_df = inventory_df[inventory_df['inventory_id']
                                             > latest_inventory_id]
@@ -610,7 +600,7 @@ def load_fact_inventory(db, inventory_df, batch_size=1000):
             else:
                 logger.info(
                     "No existing inventory in warehouse, loading all inventory data")
-                # Create inventory_id for new records
+
                 inventory_df['inventory_id'] = (
                     inventory_df['product_id'].astype(str) + '_' +
                     inventory_df['store_id'].astype(str) + '_' +
@@ -619,7 +609,7 @@ def load_fact_inventory(db, inventory_df, batch_size=1000):
         except Exception as e:
             logger.warning(
                 f"Could not get latest inventory_id, proceeding with full load: {e}")
-            # Ensure we have the datetime column and inventory_id as fallback
+
             if 'last_updated_dt' not in inventory_df.columns:
                 inventory_df['last_updated_dt'] = pd.to_datetime(
                     inventory_df['last_updated'])
@@ -723,7 +713,7 @@ def load_fact_inventory(db, inventory_df, batch_size=1000):
                         method=None
                     )
                     total_loaded += len(batch)
-                    if (i // actual_batch_size + 1) % 20 == 0:  # Reduced frequency
+                    if (i // actual_batch_size + 1) % 20 == 0:
                         print(
                             f"  Loading inventory: {total_loaded}/{len(fact_df)} records...")
                 except Exception as batch_error:
@@ -796,7 +786,6 @@ def load_data_to_warehouse(transformed_data):
                     logger.error(f"Failed to load {data_key} data")
                     return False
 
-        # Handle promotions
         if 'promotions' in transformed_data and transformed_data['promotions'] is not None and not transformed_data['promotions'].empty:
             if not load_dimension_table(db, transformed_data['promotions'], 'dimpromotion', 'promotion_key'):
                 logger.error("Failed to load promotions data")

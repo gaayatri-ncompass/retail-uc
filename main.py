@@ -38,26 +38,25 @@ def main():
         print("=" * 50)
 
     except ExtractionError as e:
-        print(f"❌ {e}")
+        print(f" {e}")
         print("ETL process failed during extraction phase.")
 
     except TransformationError as e:
-        print(f"❌ {e}")
+        print(f" {e}")
         print("ETL process failed during transformation phase.")
 
     except LoadingError as e:
-        print(f"❌ {e}")
+        print(f" {e}")
         print("ETL process failed during loading phase.")
 
     except ETLError as e:
-        print(f"❌ {e}")
+        print(f" {e}")
         print("ETL process failed with a general error.")
 
     except Exception as e:
-        print(f"❌ Unexpected error: {str(e)}")
+        print(f" Unexpected error: {str(e)}")
         print("ETL process failed with an unexpected error.")
 
 
-# Run the main function
 if __name__ == "__main__":
     main()
