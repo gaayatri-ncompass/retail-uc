@@ -126,9 +126,9 @@ def create_promotion_dimension():
 
 
 def transform_data():
-    """Transform staging data to warehouse-ready format"""
+    """Transform staging data to warehouse-ready format using incremental processing"""
 
-    print("Starting FULL data transformation...")
+    print("Starting incremental data transformation using metadata watermarks...")
 
     staging_db = get_staging_db_connector()
     warehouse_db = get_warehouse_db_connector()
@@ -137,20 +137,80 @@ def transform_data():
         staging_db.connect()
         warehouse_db.connect()
 
-        # Extract ALL data from staging tables (not incremental)
         try:
-            print("Reading ALL data from staging tables...")
-            customers_df = staging_db.run_query("SELECT * FROM stg_customers")
-            products_df = staging_db.run_query("SELECT * FROM stg_products")
-            stores_df = staging_db.run_query("SELECT * FROM stg_stores")
-            suppliers_df = staging_db.run_query("SELECT * FROM stg_suppliers")
-            sales_df = staging_db.run_query("SELECT * FROM stg_sales")
-            inventory_df = staging_db.run_query("SELECT * FROM stg_inventory")
+            print("Reading incremental data from staging tables using metadata...")
+
+            # Get watermarks from ETL metadata table
+            customers_watermark = staging_db.run_query(
+                "SELECT last_processed_id FROM etl_process_log WHERE table_name = 'stg_customers'"
+            )
+            products_watermark = staging_db.run_query(
+                "SELECT last_processed_id FROM etl_process_log WHERE table_name = 'stg_products'"
+            )
+            stores_watermark = staging_db.run_query(
+                "SELECT last_processed_id FROM etl_process_log WHERE table_name = 'stg_stores'"
+            )
+            suppliers_watermark = staging_db.run_query(
+                "SELECT last_processed_id FROM etl_process_log WHERE table_name = 'stg_suppliers'"
+            )
+            sales_watermark = staging_db.run_query(
+                "SELECT last_processed_id FROM etl_process_log WHERE table_name = 'stg_sales'"
+            )
+            inventory_watermark = staging_db.run_query(
+                "SELECT last_processed_id FROM etl_process_log WHERE table_name = 'stg_inventory'"
+            )
+
+            # Set default watermarks if no metadata exists
+            customer_last_id = customers_watermark.iloc[0][
+                'last_processed_id'] if customers_watermark is not None and not customers_watermark.empty else 'CUST0'
+            product_last_id = products_watermark.iloc[0][
+                'last_processed_id'] if products_watermark is not None and not products_watermark.empty else 'PROD0'
+            store_last_id = stores_watermark.iloc[0][
+                'last_processed_id'] if stores_watermark is not None and not stores_watermark.empty else 'STORE0'
+            supplier_last_id = suppliers_watermark.iloc[0][
+                'last_processed_id'] if suppliers_watermark is not None and not suppliers_watermark.empty else 'SUP0'
+            sales_last_id = sales_watermark.iloc[0]['last_processed_id'] if sales_watermark is not None and not sales_watermark.empty else 'SALE0'
+            inventory_last_id = inventory_watermark.iloc[0][
+                'last_processed_id'] if inventory_watermark is not None and not inventory_watermark.empty else '1900-01-01'
+
+            print(
+                f"Metadata watermarks - Customer: {customer_last_id}, Product: {product_last_id}, Store: {store_last_id}, Supplier: {supplier_last_id}, Sales: {sales_last_id}, Inventory: {inventory_last_id}")
+
+            # Build incremental queries based on metadata
+            customers_df = staging_db.run_query(
+                f"SELECT * FROM stg_customers WHERE customer_id > '{customer_last_id}' ORDER BY customer_id")
+            products_df = staging_db.run_query(
+                f"SELECT * FROM stg_products WHERE product_id > '{product_last_id}' ORDER BY product_id")
+            stores_df = staging_db.run_query(
+                f"SELECT * FROM stg_stores WHERE store_id > '{store_last_id}' ORDER BY store_id")
+            suppliers_df = staging_db.run_query(
+                f"SELECT * FROM stg_suppliers WHERE supplier_id > '{supplier_last_id}' ORDER BY supplier_id")
+            sales_df = staging_db.run_query(
+                f"SELECT * FROM stg_sales WHERE sale_id > '{sales_last_id}' ORDER BY sale_id")
+            inventory_df = staging_db.run_query(
+                f"SELECT * FROM stg_inventory WHERE last_updated > '{inventory_last_id}' ORDER BY last_updated")
+
+            # Handle None results
+            if customers_df is None:
+                customers_df = pd.DataFrame()
+            if products_df is None:
+                products_df = pd.DataFrame()
+            if stores_df is None:
+                stores_df = pd.DataFrame()
+            if suppliers_df is None:
+                suppliers_df = pd.DataFrame()
+            if sales_df is None:
+                sales_df = pd.DataFrame()
+            if inventory_df is None:
+                inventory_df = pd.DataFrame()
+
+            print(
+                f"Incremental data found: customers={len(customers_df)}, products={len(products_df)}, stores={len(stores_df)}, suppliers={len(suppliers_df)}, sales={len(sales_df)}, inventory={len(inventory_df)}")
+
         except Exception as e:
             raise DatabaseError(
                 f"Failed to extract data from staging: {str(e)}", "DB004")
 
-        # Clean data with error handling
         try:
             print("Cleaning customer data...")
             customers_clean = clean_customer_data(customers_df)
@@ -173,7 +233,6 @@ def transform_data():
             raise TransformationError(
                 f"Data cleaning failed: {str(e)}", "TRF001")
 
-        # Create dimensions
         try:
             print("Creating date dimension...")
             if not sales_clean.empty and not inventory_clean.empty:
@@ -189,7 +248,7 @@ def transform_data():
                 max_date = inventory_clean['last_updated'].max()
             else:
                 min_date = pd.Timestamp('2020-01-01')
-                max_date = pd.Timestamp('2030-12-31')  # Extended default range
+                max_date = pd.Timestamp('2030-12-31')
 
             # Ensure we have a reasonable buffer for future dates
             # 1 year before earliest date
@@ -217,6 +276,70 @@ def transform_data():
             'dates': date_dim,
             'promotions': promotion_dim
         }
+
+        # Update ETL metadata table with latest processed IDs
+        try:
+            print("Updating ETL metadata watermarks...")
+
+            # Update watermarks only if we have new data
+            if not customers_clean.empty:
+                latest_customer = customers_clean['customer_id'].max()
+                staging_db.execute_query(
+                    f"INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
+                    f"VALUES ('stg_customers', '{latest_customer}', NOW()) "
+                    f"ON DUPLICATE KEY UPDATE last_processed_id = '{latest_customer}', last_updated = NOW()"
+                )
+                print(f"Updated customer watermark to: {latest_customer}")
+
+            if not products_clean.empty:
+                latest_product = products_clean['product_id'].max()
+                staging_db.execute_query(
+                    f"INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
+                    f"VALUES ('stg_products', '{latest_product}', NOW()) "
+                    f"ON DUPLICATE KEY UPDATE last_processed_id = '{latest_product}', last_updated = NOW()"
+                )
+                print(f"Updated product watermark to: {latest_product}")
+
+            if not stores_clean.empty:
+                latest_store = stores_clean['store_id'].max()
+                staging_db.execute_query(
+                    f"INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
+                    f"VALUES ('stg_stores', '{latest_store}', NOW()) "
+                    f"ON DUPLICATE KEY UPDATE last_processed_id = '{latest_store}', last_updated = NOW()"
+                )
+                print(f"Updated store watermark to: {latest_store}")
+
+            if not suppliers_clean.empty:
+                latest_supplier = suppliers_clean['supplier_id'].max()
+                staging_db.execute_query(
+                    f"INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
+                    f"VALUES ('stg_suppliers', '{latest_supplier}', NOW()) "
+                    f"ON DUPLICATE KEY UPDATE last_processed_id = '{latest_supplier}', last_updated = NOW()"
+                )
+                print(f"Updated supplier watermark to: {latest_supplier}")
+
+            if not sales_clean.empty:
+                latest_sale = sales_clean['sale_id'].max()
+                staging_db.execute_query(
+                    f"INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
+                    f"VALUES ('stg_sales', '{latest_sale}', NOW()) "
+                    f"ON DUPLICATE KEY UPDATE last_processed_id = '{latest_sale}', last_updated = NOW()"
+                )
+                print(f"Updated sales watermark to: {latest_sale}")
+
+            if not inventory_clean.empty:
+                latest_inventory = inventory_clean['last_updated'].max().strftime(
+                    '%Y-%m-%d %H:%M:%S')
+                staging_db.execute_query(
+                    f"INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
+                    f"VALUES ('stg_inventory', '{latest_inventory}', NOW()) "
+                    f"ON DUPLICATE KEY UPDATE last_processed_id = '{latest_inventory}', last_updated = NOW()"
+                )
+                print(f"Updated inventory watermark to: {latest_inventory}")
+
+        except Exception as e:
+            print(f"Warning: Failed to update ETL metadata: {e}")
+            # Don't fail the entire process if metadata update fails
 
         print("Data transformation completed successfully!")
         return transformed_data

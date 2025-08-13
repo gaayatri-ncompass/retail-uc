@@ -126,7 +126,7 @@ def create_warehouse_tables(db):
             if not result:
                 logger.error(f"Failed to create table {table_name}")
                 return False
-        logger.info("✅ Warehouse tables ready")
+        logger.info("Warehouse tables ready")
         return True
     except Exception as e:
         logger.error(f"Error creating warehouse tables: {str(e)}")
