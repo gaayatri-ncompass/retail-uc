@@ -2,6 +2,10 @@ import pandas as pd
 from src.utils.config import get_staging_db_connector
 from src.utils.exceptions import ExtractionError, DatabaseError
 from src.utils.validator import validate_dataframe
+from logger import get_logger
+
+# Initialize simple logger
+logger = get_logger("EXTRACT")
 
 EXPECTED_COLUMNS = {
     'customers': ['customer_id', 'customer_name', 'email', 'phone', 'address', 'signup_date'],
@@ -14,6 +18,8 @@ EXPECTED_COLUMNS = {
 
 
 def create_etl_tables(db):
+    """Create ETL metadata and staging tables"""
+    logger.info("Creating ETL tables...")
 
     log_table_query = '''
         CREATE TABLE IF NOT EXISTS etl_process_log (
@@ -23,6 +29,7 @@ def create_etl_tables(db):
         )
     '''
     if not db.execute_query(log_table_query):
+        logger.error("Failed to create etl_process_log table")
         raise DatabaseError("Failed to create etl_process_log table", "DB001")
 
     create_tables_queries = {
@@ -84,103 +91,124 @@ def create_etl_tables(db):
 
     for table, query in create_tables_queries.items():
         if not db.execute_query(query):
+            logger.error(f"Failed to create staging table for {table}")
             raise DatabaseError(
                 f"Failed to create staging table for {table}", "DB002")
+
+    logger.info("ETL tables created successfully")
     return True
 
 
 def load_csv_to_staging(db, file_name, table_name, pk_column):
+    """Load CSV data to staging table with incremental processing"""
+    logger.info(f"Loading {file_name} to staging table {table_name}")
 
     try:
+        chunk_size = 1000
+        total_processed = 0
 
-        df_new = pd.read_csv(f'data/{file_name}', dtype=str)
+        for chunk_num, df_chunk in enumerate(pd.read_csv(f'data/{file_name}', dtype=str, chunksize=chunk_size), 1):
+            logger.debug(
+                f"Processing chunk {chunk_num} ({len(df_chunk)} records)...")
 
-        expected_cols = EXPECTED_COLUMNS.get(table_name, [])
-        if expected_cols:
+            if chunk_num == 1:
+                expected_cols = EXPECTED_COLUMNS.get(table_name, [])
+                if expected_cols:
+                    missing_cols = []
+                    for col in expected_cols:
+                        if col not in df_chunk.columns:
+                            missing_cols.append(col)
+                    if missing_cols:
+                        logger.error(
+                            f"Missing expected columns in {file_name}: {missing_cols}")
+                        raise ExtractionError(
+                            f"Missing expected columns in {file_name}: {missing_cols}")
+                    logger.debug(
+                        f"Filtered CSV to expected columns: {expected_cols}")
 
-            missing_cols = []
-            for col in expected_cols:
-                if col not in df_new.columns:
-                    missing_cols.append(col)
+            # Filter to expected columns
+            expected_cols = EXPECTED_COLUMNS.get(table_name, [])
+            if expected_cols:
+                df_chunk = df_chunk[expected_cols]
 
-            if missing_cols:
-                raise ExtractionError(
-                    f"Missing expected columns in {file_name}: {missing_cols}")
+            df_chunk.drop_duplicates(inplace=True)
 
-            df_new = df_new[expected_cols]
-            print(f"Filtered CSV to expected columns: {expected_cols}")
+            # Check for new records
+            log_query = f"SELECT last_processed_id FROM etl_process_log WHERE table_name = '{table_name}'"
+            last_id_df = db.run_query(log_query)
 
-        df_new.drop_duplicates(inplace=True)
+            last_processed_id = None
+            if last_id_df is not None and not last_id_df.empty:
+                last_processed_id = last_id_df['last_processed_id'].iloc[0]
 
-        log_query = f"SELECT last_processed_id FROM etl_process_log WHERE table_name = '{table_name}'"
-        last_id_df = db.run_query(log_query)
+            if last_processed_id:
+                df_to_insert = df_chunk[df_chunk[pk_column]
+                                        > last_processed_id]
+            else:
+                df_to_insert = df_chunk
 
-        last_processed_id = None
-        if last_id_df is not None and not last_id_df.empty:
-            last_processed_id = last_id_df['last_processed_id'].iloc[0]
+            if df_to_insert.empty:
+                logger.debug(f"No new records in chunk {chunk_num}")
+                continue
 
-        if last_processed_id:
+            # Validate and insert
+            logger.debug(f"Validating {len(df_to_insert)} new records...")
+            is_valid = validate_dataframe(df_to_insert, table_name)
+            if not is_valid:
+                logger.warning(
+                    f"Data validation issues found for {table_name}")
 
-            df_to_insert = df_new[df_new[pk_column] > last_processed_id]
-            print(
-                f"Found {len(df_to_insert)} new records out of {len(df_new)} total records")
-        else:
-            df_to_insert = df_new
-            print(
-                f"No previous processing found, processing all {len(df_new)} records")
+            table_full_name = f'stg_{table_name}'
+            df_to_insert.to_sql(name=table_full_name,
+                                con=db.engine, if_exists='append', index=False)
 
-        table_full_name = f'stg_{table_name}'
+            chunk_processed = len(df_to_insert)
+            total_processed += chunk_processed
+            logger.debug(
+                f"Inserted {chunk_processed} records from chunk {chunk_num}")
 
-        if df_to_insert.empty:
-            print(f"No new rows to insert into {table_full_name}")
-            return True
+        logger.info(
+            f"Total new records processed for {table_name}: {total_processed}")
 
-        print(
-            f"Validating {len(df_to_insert)} new records for {table_name}...")
-        is_valid = validate_dataframe(df_to_insert, table_name)
-
-        if not is_valid:
-            print(
-                f"  Warning: Data validation found issues in {len(df_to_insert)} new records from {file_name}")
-
-        df_to_insert.to_sql(
-            name=table_full_name,
-            con=db.engine,
-            if_exists='append',
-            index=False
-        )
-
-        print(f"Inserted {len(df_to_insert)} new rows into {table_full_name}")
-
-        if not df_to_insert.empty:
-            max_id = df_to_insert[pk_column].max()
-            update_query = f"""
-                INSERT INTO etl_process_log (table_name, last_processed_id, last_updated)
-                VALUES ('{table_name}', '{max_id}', CURRENT_TIMESTAMP)
-                ON DUPLICATE KEY UPDATE last_processed_id = '{max_id}', last_updated = CURRENT_TIMESTAMP
-            """
-            db.execute_query(update_query)
+        # Update log with max ID if any records were processed
+        if total_processed > 0:
+            # Get the latest max ID from the table
+            max_id_query = f"SELECT MAX({pk_column}) as max_id FROM stg_{table_name}"
+            max_id_df = db.run_query(max_id_query)
+            if max_id_df is not None and not max_id_df.empty:
+                max_id = max_id_df['max_id'].iloc[0]
+                update_query = f"""
+                    INSERT INTO etl_process_log (table_name, last_processed_id, last_updated)
+                    VALUES ('{table_name}', '{max_id}', CURRENT_TIMESTAMP)
+                    ON DUPLICATE KEY UPDATE last_processed_id = '{max_id}', last_updated = CURRENT_TIMESTAMP
+                """
+                db.execute_query(update_query)
+                logger.debug(f"Updated ETL log with max ID: {max_id}")
 
         return True
 
     except FileNotFoundError:
+        logger.error(f"CSV file not found: data/{file_name}")
         raise ExtractionError(
             f"CSV file not found: data/{file_name}")
     except pd.errors.EmptyDataError:
+        logger.error(f"CSV file is empty: data/{file_name}")
         raise ExtractionError(f"CSV file is empty: data/{file_name}")
     except Exception as e:
+        logger.error(f"Error loading {file_name}: {str(e)}")
         raise ExtractionError(f"Error loading {file_name}: {str(e)}")
 
 
 def run_extraction():
-
-    print("Extraction process started...")
+    """Main extraction function"""
+    logger.info("Extraction process started...")
     db = get_staging_db_connector()
 
     try:
         db.connect()
 
         if not create_etl_tables(db):
+            logger.error("Failed to create ETL tables")
             raise DatabaseError("Failed to create ETL tables")
 
         files_to_load = {
@@ -194,18 +222,23 @@ def run_extraction():
 
         for file_name, (table_name, pk_column) in files_to_load.items():
             try:
+                logger.info(f"Processing {file_name}...")
                 if not load_csv_to_staging(db, file_name, table_name, pk_column):
-                    raise ExtractionError(
-                        f"Failed to load {file_name}")
+                    logger.error(f"Failed to load {file_name}")
+                    raise ExtractionError(f"Failed to load {file_name}")
             except (ExtractionError, DatabaseError):
                 raise
             except Exception as e:
+                logger.error(f"Unexpected error loading {file_name}: {str(e)}")
                 raise ExtractionError(
                     f"Unexpected error loading {file_name}: {str(e)}", "EXT005")
+
+        logger.info("Extraction process completed successfully")
 
     except (ExtractionError, DatabaseError):
         raise
     except Exception as e:
+        logger.critical(f"Extraction process failed: {str(e)}")
         raise ExtractionError(f"Extraction process failed: {str(e)}", "EXT006")
     finally:
         db.disconnect()

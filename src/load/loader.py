@@ -4,12 +4,12 @@ from sqlalchemy import text
 import logging
 import traceback
 import pandas as pd
+from logger import get_logger
+
 pd.set_option('future.no_silent_downcasting', True)
 
-
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# Initialize logger for loading operations
+logger = get_logger("LOADER")
 
 
 def create_warehouse_tables(db):
@@ -245,8 +245,10 @@ def load_fact_sales(db, sales_df, batch_size=1000):
 
         required_columns = ['customer_id', 'product_id',
                             'store_id', 'sale_date', 'sale_id']
-        missing_columns = [
-            col for col in required_columns if col not in sales_df.columns]
+        missing_columns = []
+        for col in required_columns:
+            if col not in sales_df.columns:
+                missing_columns.append(col)
         if missing_columns:
             logger.error(
                 f"Missing required columns in sales data: {missing_columns}")
@@ -442,8 +444,10 @@ def load_fact_sales(db, sales_df, batch_size=1000):
 
             required_fact_cols = key_cols + \
                 ['sale_id', 'quantity', 'total_amount', 'payment_type', 'channel']
-            missing_fact_cols = [
-                col for col in required_fact_cols if col not in fact_df.columns]
+            missing_fact_cols = []
+            for col in required_fact_cols:
+                if col not in fact_df.columns:
+                    missing_fact_cols.append(col)
             if missing_fact_cols:
                 logger.error(
                     f"Missing columns for fact table: {missing_fact_cols}")
@@ -497,35 +501,17 @@ def load_fact_sales(db, sales_df, batch_size=1000):
                 except Exception as batch_error:
                     logger.error(
                         f"Error loading batch {i//actual_batch_size + 1}: {batch_error}")
-
-                    for idx, row in batch.iterrows():
-                        try:
-                            row_df = pd.DataFrame([row])
-                            row_df.to_sql(
-                                name='factsales',
-                                con=db.engine,
-                                if_exists='append',
-                                index=False,
-                                method=None
-                            )
-                            total_loaded += 1
-                        except Exception as row_error:
-                            logger.error(
-                                f"Failed to insert individual record: {row['sale_id']} - {row_error}")
-                            continue
-
             logger.info(
                 f"Successfully loaded {total_loaded} sales records to warehouse")
             return True
         except Exception as e:
             logger.error(f"Error loading fact sales data: {e}")
             logger.error(f"Sample data: {fact_df.head()}")
-            logger.error(traceback.format_exc())
+
             return False
 
     except Exception as e:
         logger.error(f"Unexpected error in load_fact_sales: {str(e)}")
-        logger.error(traceback.format_exc())
         return False
 
 
@@ -546,8 +532,10 @@ def load_fact_inventory(db, inventory_df, batch_size=1000):
 
         required_columns = ['product_id', 'store_id',
                             'supplier_id', 'last_updated']
-        missing_columns = [
-            col for col in required_columns if col not in inventory_df.columns]
+        missing_columns = []
+        for col in required_columns:
+            if col not in inventory_df.columns:
+                missing_columns.append(col)
         if missing_columns:
             logger.error(
                 f"Missing required columns in inventory data: {missing_columns}")
@@ -736,17 +724,15 @@ def load_fact_inventory(db, inventory_df, batch_size=1000):
                                 f"Failed to insert individual inventory record: {row['inventory_id']} - {row_error}")
                             continue
 
-            print(f"  ✅ Loaded {total_loaded} new inventory records")
+            print(f"Loaded {total_loaded} new inventory records")
             return True
         except Exception as e:
             logger.error(f"Error loading fact inventory data: {e}")
             logger.error(f"Sample data: {fact_df.head()}")
-            logger.error(traceback.format_exc())
             return False
 
     except Exception as e:
         logger.error(f"Unexpected error in load_fact_inventory: {str(e)}")
-        logger.error(traceback.format_exc())
         return False
 
 

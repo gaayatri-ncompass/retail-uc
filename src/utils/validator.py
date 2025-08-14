@@ -1,9 +1,10 @@
 from cerberus import Validator
 from .exceptions import ExtractionError
 import logging
+from logger import get_logger
 
-
-logger = logging.getLogger(__name__)
+# Initialize logger for validation operations
+logger = get_logger("VALIDATOR")
 
 
 customer_schema = {

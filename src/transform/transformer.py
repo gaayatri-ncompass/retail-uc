@@ -3,9 +3,15 @@ import numpy as np
 from datetime import datetime, timedelta
 from src.utils.config import get_staging_db_connector, get_warehouse_db_connector
 from src.utils.exceptions import TransformationError, DatabaseError
+from logger import get_logger
+
+# Initialize logger for transformation operations
+logger = get_logger("TRANSFORMER")
 
 
 def clean_customer_data(df):
+    """Clean and validate customer data"""
+    logger.debug(f"Cleaning customer data: {len(df)} records")
 
     if df.empty:
         return df
@@ -18,8 +24,15 @@ def clean_customer_data(df):
     df.loc[:, 'signup_date'] = pd.to_datetime(
         df['signup_date'], errors='coerce')
 
+    initial_count = len(df)
     df = df.dropna(subset=['signup_date'])
+    dropped_count = initial_count - len(df)
 
+    if dropped_count > 0:
+        logger.warning(
+            f"Dropped {dropped_count} customer records with invalid dates")
+
+    logger.debug(f"Customer data cleaned: {len(df)} records remaining")
     return df
 
 
@@ -126,9 +139,9 @@ def create_promotion_dimension():
 
 
 def transform_data():
-    """Transform staging data to warehouse-ready format using incremental processing"""
-
-    print("Starting incremental data transformation using metadata watermarks...")
+    """Main transformation function with incremental processing"""
+    logger.info(
+        "Starting incremental data transformation using metadata watermarks...")
 
     staging_db = get_staging_db_connector()
     warehouse_db = get_warehouse_db_connector()
@@ -138,9 +151,9 @@ def transform_data():
         warehouse_db.connect()
 
         try:
-            print("Reading incremental data from staging tables using metadata...")
+            logger.info(
+                "Reading incremental data from staging tables using metadata...")
 
-            # Get watermarks from ETL metadata table
             customers_watermark = staging_db.run_query(
                 "SELECT last_processed_id FROM etl_process_log WHERE table_name = 'stg_customers'"
             )
@@ -172,7 +185,7 @@ def transform_data():
             inventory_last_id = inventory_watermark.iloc[0][
                 'last_processed_id'] if inventory_watermark is not None and not inventory_watermark.empty else '1900-01-01'
 
-            print(
+            logger.debug(
                 f"Metadata watermarks - Customer: {customer_last_id}, Product: {product_last_id}, Store: {store_last_id}, Supplier: {supplier_last_id}, Sales: {sales_last_id}, Inventory: {inventory_last_id}")
 
             customers_df = staging_db.run_query(
@@ -188,7 +201,6 @@ def transform_data():
             inventory_df = staging_db.run_query(
                 f"SELECT * FROM stg_inventory WHERE last_updated > '{inventory_last_id}' ORDER BY last_updated")
 
-            # Handle None results
             if customers_df is None:
                 customers_df = pd.DataFrame()
             if products_df is None:
@@ -202,37 +214,39 @@ def transform_data():
             if inventory_df is None:
                 inventory_df = pd.DataFrame()
 
-            print(
+            logger.info(
                 f"Incremental data found: customers={len(customers_df)}, products={len(products_df)}, stores={len(stores_df)}, suppliers={len(suppliers_df)}, sales={len(sales_df)}, inventory={len(inventory_df)}")
 
         except Exception as e:
+            logger.error(f"Failed to extract data from staging: {str(e)}")
             raise DatabaseError(
                 f"Failed to extract data from staging: {str(e)}", "DB004")
 
         try:
-            print("Cleaning customer data...")
+            logger.info("Cleaning customer data...")
             customers_clean = clean_customer_data(customers_df)
 
-            print("Cleaning product data...")
+            logger.info("Cleaning product data...")
             products_clean = clean_product_data(products_df)
 
-            print("Cleaning store data...")
+            logger.info("Cleaning store data...")
             stores_clean = clean_store_data(stores_df)
 
-            print("Cleaning supplier data...")
+            logger.info("Cleaning supplier data...")
             suppliers_clean = clean_supplier_data(suppliers_df)
 
-            print("Cleaning sales data...")
+            logger.info("Cleaning sales data...")
             sales_clean = clean_sales_data(sales_df)
 
-            print("Cleaning inventory data...")
+            logger.info("Cleaning inventory data...")
             inventory_clean = clean_inventory_data(inventory_df)
         except Exception as e:
+            logger.error(f"Data cleaning failed: {str(e)}")
             raise TransformationError(
                 f"Data cleaning failed: {str(e)}", "TRF001")
 
         try:
-            print("Creating date dimension...")
+            logger.info("Creating date dimension...")
             if not sales_clean.empty and not inventory_clean.empty:
                 min_date = min(sales_clean['sale_date'].min(
                 ), inventory_clean['last_updated'].min())
@@ -252,13 +266,14 @@ def transform_data():
 
             max_date = max_date + pd.DateOffset(years=2)
 
-            print(
+            logger.debug(
                 f"Creating date dimension from {min_date.date()} to {max_date.date()}")
             date_dim = create_date_dimension(min_date, max_date)
 
-            print("Creating promotion dimension...")
+            logger.info("Creating promotion dimension...")
             promotion_dim = create_promotion_dimension()
         except Exception as e:
+            logger.error(f"Dimension creation failed: {str(e)}")
             raise TransformationError(
                 f"Dimension creation failed: {str(e)}", "TRF002")
 
@@ -274,7 +289,7 @@ def transform_data():
         }
 
         try:
-            print("Updating ETL metadata watermarks...")
+            logger.info("Updating ETL metadata watermarks...")
 
             if not customers_clean.empty:
                 latest_customer = customers_clean['customer_id'].max()
@@ -283,7 +298,8 @@ def transform_data():
                     f"VALUES ('stg_customers', '{latest_customer}', NOW()) "
                     f"ON DUPLICATE KEY UPDATE last_processed_id = '{latest_customer}', last_updated = NOW()"
                 )
-                print(f"Updated customer watermark to: {latest_customer}")
+                logger.debug(
+                    f"Updated customer watermark to: {latest_customer}")
 
             if not products_clean.empty:
                 latest_product = products_clean['product_id'].max()
@@ -292,7 +308,7 @@ def transform_data():
                     f"VALUES ('stg_products', '{latest_product}', NOW()) "
                     f"ON DUPLICATE KEY UPDATE last_processed_id = '{latest_product}', last_updated = NOW()"
                 )
-                print(f"Updated product watermark to: {latest_product}")
+                logger.debug(f"Updated product watermark to: {latest_product}")
 
             if not stores_clean.empty:
                 latest_store = stores_clean['store_id'].max()
@@ -301,7 +317,7 @@ def transform_data():
                     f"VALUES ('stg_stores', '{latest_store}', NOW()) "
                     f"ON DUPLICATE KEY UPDATE last_processed_id = '{latest_store}', last_updated = NOW()"
                 )
-                print(f"Updated store watermark to: {latest_store}")
+                logger.debug(f"Updated store watermark to: {latest_store}")
 
             if not suppliers_clean.empty:
                 latest_supplier = suppliers_clean['supplier_id'].max()
@@ -310,7 +326,8 @@ def transform_data():
                     f"VALUES ('stg_suppliers', '{latest_supplier}', NOW()) "
                     f"ON DUPLICATE KEY UPDATE last_processed_id = '{latest_supplier}', last_updated = NOW()"
                 )
-                print(f"Updated supplier watermark to: {latest_supplier}")
+                logger.debug(
+                    f"Updated supplier watermark to: {latest_supplier}")
 
             if not sales_clean.empty:
                 latest_sale = sales_clean['sale_id'].max()
@@ -319,7 +336,7 @@ def transform_data():
                     f"VALUES ('stg_sales', '{latest_sale}', NOW()) "
                     f"ON DUPLICATE KEY UPDATE last_processed_id = '{latest_sale}', last_updated = NOW()"
                 )
-                print(f"Updated sales watermark to: {latest_sale}")
+                logger.debug(f"Updated sales watermark to: {latest_sale}")
 
             if not inventory_clean.empty:
                 latest_inventory = inventory_clean['last_updated'].max().strftime(
@@ -329,17 +346,19 @@ def transform_data():
                     f"VALUES ('stg_inventory', '{latest_inventory}', NOW()) "
                     f"ON DUPLICATE KEY UPDATE last_processed_id = '{latest_inventory}', last_updated = NOW()"
                 )
-                print(f"Updated inventory watermark to: {latest_inventory}")
+                logger.debug(
+                    f"Updated inventory watermark to: {latest_inventory}")
 
         except Exception as e:
-            print(f"Warning: Failed to update ETL metadata: {e}")
+            logger.warning(f"Failed to update ETL metadata: {e}")
 
-        print("Data transformation completed successfully!")
+        logger.info("Data transformation completed successfully!")
         return transformed_data
 
     except (TransformationError, DatabaseError):
         raise
     except Exception as e:
+        logger.critical(f"Transformation process failed: {str(e)}")
         raise TransformationError(
             f"Transformation process failed: {str(e)}", "TRF003")
     finally:

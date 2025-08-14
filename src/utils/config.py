@@ -7,7 +7,7 @@ load_dotenv()
 
 
 def get_staging_db_connector():
-    
+
     return DBConnector(
         host=os.getenv('STAGING_DB_HOST', 'localhost'),
         user=os.getenv('STAGING_DB_USER', 'root'),
@@ -17,7 +17,7 @@ def get_staging_db_connector():
 
 
 def get_warehouse_db_connector():
-    
+
     return DBConnector(
         host=os.getenv('WAREHOUSE_DB_HOST', 'localhost'),
         user=os.getenv('WAREHOUSE_DB_USER', 'root'),

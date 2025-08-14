@@ -1,15 +1,19 @@
 from src.utils.config import get_warehouse_db_connector
+from logger import get_logger
+
+# Initialize logger for analytics operations
+logger = get_logger("ANALYTICS")
 
 
 def run_sample_analytics():
-
-    print("Running sample analytics...")
+    """Run sample analytics queries on the data warehouse"""
+    logger.info("Running sample analytics...")
 
     db = get_warehouse_db_connector()
     db.connect()
 
     try:
-
+        # Top products analysis
         top_products_query = """
             SELECT
                 p.product_name,
@@ -22,10 +26,10 @@ def run_sample_analytics():
         """
         top_products = db.run_query(top_products_query)
         if top_products is not None:
-            print("\nTop 5 Best-Selling Products:")
-            print(top_products)
+            logger.info("\nTop 5 Best-Selling Products:")
+            logger.info(f"\n{top_products}")
 
-        
+        # Monthly sales analysis
         monthly_sales_query = """
             SELECT
                 d.year,
@@ -38,10 +42,10 @@ def run_sample_analytics():
         """
         monthly_sales = db.run_query(monthly_sales_query)
         if monthly_sales is not None:
-            print("\nTotal Sales Amount per Month:")
-            print(monthly_sales)
+            logger.info("\nTotal Sales Amount per Month:")
+            logger.info(f"\n{monthly_sales}")
 
-       
+        # Inventory aging analysis
         inventory_aging_query = """
             SELECT
                 CASE
@@ -58,14 +62,14 @@ def run_sample_analytics():
         """
         inventory_aging_report = db.run_query(inventory_aging_query)
         if inventory_aging_report is not None:
-            print("\nInventory Aging Report:")
-            print(inventory_aging_report)
+            logger.info("\nInventory Aging Report:")
+            logger.info(f"\n{inventory_aging_report}")
 
     except Exception as e:
-        print(f"An error occurred during analytics: {e}")
+        logger.error(f"An error occurred during analytics: {e}")
     finally:
         db.disconnect()
-        print("\nAnalytics run complete.")
+        logger.info("Analytics run complete.")
 
 
 def main():

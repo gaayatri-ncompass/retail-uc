@@ -1,0 +1,16 @@
+
+.env
+
+node_modules/
+
+# Log files
+logs/
+*.log
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+

@@ -1,22 +1,42 @@
 import logging
-
-logging.basicConfig(
-    level=logging.DEBUG,
-    filename='app.log',
-    filemode='a',
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+from datetime import datetime
+import os
 
 
-print("--- Running the script ---")
+class SimpleLogger:
+    def __init__(self, name="ETL"):
+        self.name = name
 
-logging.debug(
-    "This is a detailed debug message. Good for tracking a variable's value.")
-logging.info("The script is starting to do some work now.")
-logging.warning(
-    "The 'discount_rate' setting was not found. Using default value of 10%.")
-logging.error(
-    "Failed to connect to the database. Cannot proceed with this task.")
-logging.critical("Catastrophic failure! Out of memory.")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.log_file = f"logs/etl_app_{timestamp}.log"
 
-print("--- Script finished ---")
+    def _log(self, level, message):
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_message = f"[{timestamp}] [{self.name}] [{level}] {message}"
+
+        print(log_message)
+
+        try:
+            with open(self.log_file, "a", encoding="utf-8") as f:
+                f.write(log_message + "\n")
+        except Exception as e:
+            print(f"Warning: Could not write to log file: {e}")
+
+    def info(self, message):
+        self._log("INFO", message)
+
+    def error(self, message):
+        self._log("ERROR", message)
+
+    def warning(self, message):
+        self._log("WARNING", message)
+
+    def debug(self, message):
+        self._log("DEBUG", message)
+
+    def critical(self, message):
+        self._log("CRITICAL", message)
+
+
+def get_logger(name="ETL"):
+    return SimpleLogger(name)
