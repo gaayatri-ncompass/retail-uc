@@ -25,13 +25,13 @@ def main():
                     last_line = output_lines[-1]
                     print(f"[{ts}] {last_line}")
                 else:
-                    print(f"[{ts}] ✅ ETL Completed")
+                    print(f"[{ts}]  ETL Completed")
 
             except FileNotFoundError:
-                print(f"[{ts}] ❌ ERROR: 'simple_etl.py' not found")
+                print(f"[{ts}]  ERROR: 'simple_etl.py' not found")
                 break
             except subprocess.CalledProcessError as e:
-                print(f"[{ts}] ❌ ETL failed with exit code {e.returncode}")
+                print(f"[{ts}]  ETL failed with exit code {e.returncode}")
 
             time.sleep(10)
 

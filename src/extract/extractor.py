@@ -3,6 +3,15 @@ from src.utils.config import get_staging_db_connector
 from src.utils.exceptions import ExtractionError, DatabaseError
 from src.utils.validator import validate_dataframe
 
+EXPECTED_COLUMNS = {
+    'customers': ['customer_id', 'customer_name', 'email', 'phone', 'address', 'signup_date'],
+    'products': ['product_id', 'product_name', 'category', 'price'],
+    'stores': ['store_id', 'store_name', 'location', 'manager'],
+    'sales': ['sale_id', 'customer_id', 'product_id', 'store_id', 'sale_date', 'quantity', 'total_amount'],
+    'inventory': ['product_id', 'store_id', 'stock_level', 'last_updated', 'supplier_id'],
+    'suppliers': ['supplier_id', 'supplier_name', 'contact_name', 'contact_email']
+}
+
 
 def create_etl_tables(db):
 
@@ -85,6 +94,22 @@ def load_csv_to_staging(db, file_name, table_name, pk_column):
     try:
 
         df_new = pd.read_csv(f'data/{file_name}', dtype=str)
+
+        expected_cols = EXPECTED_COLUMNS.get(table_name, [])
+        if expected_cols:
+
+            missing_cols = []
+            for col in expected_cols:
+                if col not in df_new.columns:
+                    missing_cols.append(col)
+
+            if missing_cols:
+                raise ExtractionError(
+                    f"Missing expected columns in {file_name}: {missing_cols}")
+
+            df_new = df_new[expected_cols]
+            print(f"Filtered CSV to expected columns: {expected_cols}")
+
         df_new.drop_duplicates(inplace=True)
 
         log_query = f"SELECT last_processed_id FROM etl_process_log WHERE table_name = '{table_name}'"
@@ -171,7 +196,7 @@ def run_extraction():
             try:
                 if not load_csv_to_staging(db, file_name, table_name, pk_column):
                     raise ExtractionError(
-                        f"Failed to load {file_name}", "EXT004")
+                        f"Failed to load {file_name}")
             except (ExtractionError, DatabaseError):
                 raise
             except Exception as e:

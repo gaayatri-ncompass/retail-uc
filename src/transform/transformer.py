@@ -160,7 +160,6 @@ def transform_data():
                 "SELECT last_processed_id FROM etl_process_log WHERE table_name = 'stg_inventory'"
             )
 
-            # Set default watermarks if no metadata exists
             customer_last_id = customers_watermark.iloc[0][
                 'last_processed_id'] if customers_watermark is not None and not customers_watermark.empty else 'CUST0'
             product_last_id = products_watermark.iloc[0][
@@ -176,7 +175,6 @@ def transform_data():
             print(
                 f"Metadata watermarks - Customer: {customer_last_id}, Product: {product_last_id}, Store: {store_last_id}, Supplier: {supplier_last_id}, Sales: {sales_last_id}, Inventory: {inventory_last_id}")
 
-            # Build incremental queries based on metadata
             customers_df = staging_db.run_query(
                 f"SELECT * FROM stg_customers WHERE customer_id > '{customer_last_id}' ORDER BY customer_id")
             products_df = staging_db.run_query(
@@ -250,10 +248,8 @@ def transform_data():
                 min_date = pd.Timestamp('2020-01-01')
                 max_date = pd.Timestamp('2030-12-31')
 
-            # Ensure we have a reasonable buffer for future dates
-            # 1 year before earliest date
             min_date = min_date - pd.DateOffset(years=1)
-            # 2 years after latest date
+
             max_date = max_date + pd.DateOffset(years=2)
 
             print(
@@ -277,11 +273,9 @@ def transform_data():
             'promotions': promotion_dim
         }
 
-        # Update ETL metadata table with latest processed IDs
         try:
             print("Updating ETL metadata watermarks...")
 
-            # Update watermarks only if we have new data
             if not customers_clean.empty:
                 latest_customer = customers_clean['customer_id'].max()
                 staging_db.execute_query(
@@ -339,7 +333,6 @@ def transform_data():
 
         except Exception as e:
             print(f"Warning: Failed to update ETL metadata: {e}")
-            # Don't fail the entire process if metadata update fails
 
         print("Data transformation completed successfully!")
         return transformed_data
