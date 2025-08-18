@@ -8,7 +8,6 @@ from logger import get_logger
 
 pd.set_option('future.no_silent_downcasting', True)
 
-# Initialize logger for loading operations
 logger = get_logger("LOADER")
 
 
@@ -155,6 +154,20 @@ def load_dimension_table(db, df, table_name, key_column, batch_size=1000):
             return False
 
         try:
+
+            valid_tables = ['dimcustomer', 'dimproduct',
+                            'dimstore', 'dimsupplier', 'dimdate', 'dimpromotion']
+            valid_key_columns = ['customer_id', 'product_id',
+                                 'store_id', 'supplier_id', 'date_key', 'promotion_key']
+
+            if table_name not in valid_tables:
+                logger.error(f"Invalid table name: {table_name}")
+                return False
+
+            if key_column not in valid_key_columns:
+                logger.error(f"Invalid key column: {key_column}")
+                return False
+
             if key_column == 'date_key':
 
                 latest_query = f"SELECT MAX({key_column}) as latest_value FROM {table_name}"
@@ -297,8 +310,10 @@ def load_fact_sales(db, sales_df, batch_size=1000):
                     method=None
                 )
 
-                promo_key_df = db.run_query(
-                    "SELECT promotion_key FROM dimpromotion WHERE promotion_name = 'No Promotion' LIMIT 1")
+                promo_key_df = db.run_query_with_params(
+                    "SELECT promotion_key FROM dimpromotion WHERE promotion_name = :promotion_name LIMIT 1",
+                    {'promotion_name': 'No Promotion'}
+                )
                 default_promotion_key = promo_key_df['promotion_key'].iloc[0]
                 logger.info(
                     f"Created default promotion with key: {default_promotion_key}")
@@ -429,8 +444,10 @@ def load_fact_sales(db, sales_df, batch_size=1000):
                     f"Found {len(invalid_dates)} records with invalid date_key")
                 fact_df = fact_df[fact_df['date_key'].isin(valid_dates)]
 
-            promo_check = db.run_query(
-                f"SELECT COUNT(*) as count FROM dimpromotion WHERE promotion_key = {default_promotion_key}")
+            promo_check = db.run_query_with_params(
+                "SELECT COUNT(*) as count FROM dimpromotion WHERE promotion_key = :promotion_key",
+                {'promotion_key': default_promotion_key}
+            )
             if promo_check is None or promo_check['count'].iloc[0] == 0:
                 logger.error(
                     f"Promotion key {default_promotion_key} does not exist in dimpromotion table")

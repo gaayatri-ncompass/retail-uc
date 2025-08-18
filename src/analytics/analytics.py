@@ -1,19 +1,19 @@
 from src.utils.config import get_warehouse_db_connector
 from logger import get_logger
 
-# Initialize logger for analytics operations
+
 logger = get_logger("ANALYTICS")
 
 
 def run_sample_analytics():
-    """Run sample analytics queries on the data warehouse"""
+
     logger.info("Running sample analytics...")
 
     db = get_warehouse_db_connector()
     db.connect()
 
     try:
-        # Top products analysis
+
         top_products_query = """
             SELECT
                 p.product_name,
@@ -29,7 +29,6 @@ def run_sample_analytics():
             logger.info("\nTop 5 Best-Selling Products:")
             logger.info(f"\n{top_products}")
 
-        # Monthly sales analysis
         monthly_sales_query = """
             SELECT
                 d.year,
@@ -45,7 +44,6 @@ def run_sample_analytics():
             logger.info("\nTotal Sales Amount per Month:")
             logger.info(f"\n{monthly_sales}")
 
-        # Inventory aging analysis
         inventory_aging_query = """
             SELECT
                 CASE

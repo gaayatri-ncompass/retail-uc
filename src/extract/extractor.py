@@ -4,7 +4,7 @@ from src.utils.exceptions import ExtractionError, DatabaseError
 from src.utils.validator import validate_dataframe
 from logger import get_logger
 
-# Initialize simple logger
+
 logger = get_logger("EXTRACT")
 
 EXPECTED_COLUMNS = {
@@ -18,7 +18,7 @@ EXPECTED_COLUMNS = {
 
 
 def create_etl_tables(db):
-    """Create ETL metadata and staging tables"""
+
     logger.info("Creating ETL tables...")
 
     log_table_query = '''
@@ -100,7 +100,7 @@ def create_etl_tables(db):
 
 
 def load_csv_to_staging(db, file_name, table_name, pk_column):
-    """Load CSV data to staging table with incremental processing"""
+
     logger.info(f"Loading {file_name} to staging table {table_name}")
 
     try:
@@ -126,16 +126,15 @@ def load_csv_to_staging(db, file_name, table_name, pk_column):
                     logger.debug(
                         f"Filtered CSV to expected columns: {expected_cols}")
 
-            # Filter to expected columns
             expected_cols = EXPECTED_COLUMNS.get(table_name, [])
             if expected_cols:
                 df_chunk = df_chunk[expected_cols]
 
             df_chunk.drop_duplicates(inplace=True)
 
-            # Check for new records
-            log_query = f"SELECT last_processed_id FROM etl_process_log WHERE table_name = '{table_name}'"
-            last_id_df = db.run_query(log_query)
+            log_query = "SELECT last_processed_id FROM etl_process_log WHERE table_name = :table_name"
+            last_id_df = db.run_query_with_params(
+                log_query, {'table_name': table_name})
 
             last_processed_id = None
             if last_id_df is not None and not last_id_df.empty:
@@ -151,7 +150,6 @@ def load_csv_to_staging(db, file_name, table_name, pk_column):
                 logger.debug(f"No new records in chunk {chunk_num}")
                 continue
 
-            # Validate and insert
             logger.debug(f"Validating {len(df_to_insert)} new records...")
             is_valid = validate_dataframe(df_to_insert, table_name)
             if not is_valid:
@@ -170,19 +168,22 @@ def load_csv_to_staging(db, file_name, table_name, pk_column):
         logger.info(
             f"Total new records processed for {table_name}: {total_processed}")
 
-        # Update log with max ID if any records were processed
         if total_processed > 0:
-            # Get the latest max ID from the table
+
             max_id_query = f"SELECT MAX({pk_column}) as max_id FROM stg_{table_name}"
             max_id_df = db.run_query(max_id_query)
             if max_id_df is not None and not max_id_df.empty:
                 max_id = max_id_df['max_id'].iloc[0]
-                update_query = f"""
+
+                update_query = """
                     INSERT INTO etl_process_log (table_name, last_processed_id, last_updated)
-                    VALUES ('{table_name}', '{max_id}', CURRENT_TIMESTAMP)
-                    ON DUPLICATE KEY UPDATE last_processed_id = '{max_id}', last_updated = CURRENT_TIMESTAMP
+                    VALUES (:table_name, :max_id, CURRENT_TIMESTAMP)
+                    ON DUPLICATE KEY UPDATE last_processed_id = :max_id, last_updated = CURRENT_TIMESTAMP
                 """
-                db.execute_query(update_query)
+                db.execute_query_with_params(update_query, {
+                    'table_name': table_name,
+                    'max_id': max_id
+                })
                 logger.debug(f"Updated ETL log with max ID: {max_id}")
 
         return True
@@ -200,7 +201,7 @@ def load_csv_to_staging(db, file_name, table_name, pk_column):
 
 
 def run_extraction():
-    """Main extraction function"""
+
     logger.info("Extraction process started...")
     db = get_staging_db_connector()
 

@@ -4,12 +4,12 @@ import time
 from datetime import datetime
 from logger import get_logger
 
-# Initialize logger for scheduler operations
+
 logger = get_logger("SCHEDULER")
 
 
 def main():
-    """Main scheduler function"""
+
     logger.info("Starting ETL Scheduler")
     logger.info("Interval: 10 seconds")
     logger.info("=" * 40)
@@ -20,7 +20,7 @@ def main():
             logger.info(f"[{ts}] Triggering ETL run...")
 
             try:
-                # Changed from simple_etl.py to main.py
+
                 result = subprocess.run([sys.executable, "main.py"],
                                         capture_output=True, text=True, check=True)
 

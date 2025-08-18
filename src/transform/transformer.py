@@ -5,12 +5,11 @@ from src.utils.config import get_staging_db_connector, get_warehouse_db_connecto
 from src.utils.exceptions import TransformationError, DatabaseError
 from logger import get_logger
 
-# Initialize logger for transformation operations
 logger = get_logger("TRANSFORMER")
 
 
 def clean_customer_data(df):
-    """Clean and validate customer data"""
+
     logger.debug(f"Cleaning customer data: {len(df)} records")
 
     if df.empty:
@@ -139,7 +138,7 @@ def create_promotion_dimension():
 
 
 def transform_data():
-    """Main transformation function with incremental processing"""
+
     logger.info(
         "Starting incremental data transformation using metadata watermarks...")
 
@@ -188,18 +187,24 @@ def transform_data():
             logger.debug(
                 f"Metadata watermarks - Customer: {customer_last_id}, Product: {product_last_id}, Store: {store_last_id}, Supplier: {supplier_last_id}, Sales: {sales_last_id}, Inventory: {inventory_last_id}")
 
-            customers_df = staging_db.run_query(
-                f"SELECT * FROM stg_customers WHERE customer_id > '{customer_last_id}' ORDER BY customer_id")
-            products_df = staging_db.run_query(
-                f"SELECT * FROM stg_products WHERE product_id > '{product_last_id}' ORDER BY product_id")
-            stores_df = staging_db.run_query(
-                f"SELECT * FROM stg_stores WHERE store_id > '{store_last_id}' ORDER BY store_id")
-            suppliers_df = staging_db.run_query(
-                f"SELECT * FROM stg_suppliers WHERE supplier_id > '{supplier_last_id}' ORDER BY supplier_id")
-            sales_df = staging_db.run_query(
-                f"SELECT * FROM stg_sales WHERE sale_id > '{sales_last_id}' ORDER BY sale_id")
-            inventory_df = staging_db.run_query(
-                f"SELECT * FROM stg_inventory WHERE last_updated > '{inventory_last_id}' ORDER BY last_updated")
+            customers_df = staging_db.run_query_with_params(
+                "SELECT * FROM stg_customers WHERE customer_id > :customer_id ORDER BY customer_id",
+                {'customer_id': customer_last_id})
+            products_df = staging_db.run_query_with_params(
+                "SELECT * FROM stg_products WHERE product_id > :product_id ORDER BY product_id",
+                {'product_id': product_last_id})
+            stores_df = staging_db.run_query_with_params(
+                "SELECT * FROM stg_stores WHERE store_id > :store_id ORDER BY store_id",
+                {'store_id': store_last_id})
+            suppliers_df = staging_db.run_query_with_params(
+                "SELECT * FROM stg_suppliers WHERE supplier_id > :supplier_id ORDER BY supplier_id",
+                {'supplier_id': supplier_last_id})
+            sales_df = staging_db.run_query_with_params(
+                "SELECT * FROM stg_sales WHERE sale_id > :sale_id ORDER BY sale_id",
+                {'sale_id': sales_last_id})
+            inventory_df = staging_db.run_query_with_params(
+                "SELECT * FROM stg_inventory WHERE last_updated > :last_updated ORDER BY last_updated",
+                {'last_updated': inventory_last_id})
 
             if customers_df is None:
                 customers_df = pd.DataFrame()
@@ -293,58 +298,67 @@ def transform_data():
 
             if not customers_clean.empty:
                 latest_customer = customers_clean['customer_id'].max()
-                staging_db.execute_query(
-                    f"INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
-                    f"VALUES ('stg_customers', '{latest_customer}', NOW()) "
-                    f"ON DUPLICATE KEY UPDATE last_processed_id = '{latest_customer}', last_updated = NOW()"
+                staging_db.execute_query_with_params(
+                    "INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
+                    "VALUES (:table_name, :latest_customer, NOW()) "
+                    "ON DUPLICATE KEY UPDATE last_processed_id = :latest_customer, last_updated = NOW()",
+                    {'table_name': 'stg_customers',
+                        'latest_customer': latest_customer}
                 )
                 logger.debug(
                     f"Updated customer watermark to: {latest_customer}")
 
             if not products_clean.empty:
                 latest_product = products_clean['product_id'].max()
-                staging_db.execute_query(
-                    f"INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
-                    f"VALUES ('stg_products', '{latest_product}', NOW()) "
-                    f"ON DUPLICATE KEY UPDATE last_processed_id = '{latest_product}', last_updated = NOW()"
+                staging_db.execute_query_with_params(
+                    "INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
+                    "VALUES (:table_name, :latest_product, NOW()) "
+                    "ON DUPLICATE KEY UPDATE last_processed_id = :latest_product, last_updated = NOW()",
+                    {'table_name': 'stg_products', 'latest_product': latest_product}
                 )
                 logger.debug(f"Updated product watermark to: {latest_product}")
 
             if not stores_clean.empty:
                 latest_store = stores_clean['store_id'].max()
-                staging_db.execute_query(
-                    f"INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
-                    f"VALUES ('stg_stores', '{latest_store}', NOW()) "
-                    f"ON DUPLICATE KEY UPDATE last_processed_id = '{latest_store}', last_updated = NOW()"
+                staging_db.execute_query_with_params(
+                    "INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
+                    "VALUES (:table_name, :latest_store, NOW()) "
+                    "ON DUPLICATE KEY UPDATE last_processed_id = :latest_store, last_updated = NOW()",
+                    {'table_name': 'stg_stores', 'latest_store': latest_store}
                 )
                 logger.debug(f"Updated store watermark to: {latest_store}")
 
             if not suppliers_clean.empty:
                 latest_supplier = suppliers_clean['supplier_id'].max()
-                staging_db.execute_query(
-                    f"INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
-                    f"VALUES ('stg_suppliers', '{latest_supplier}', NOW()) "
-                    f"ON DUPLICATE KEY UPDATE last_processed_id = '{latest_supplier}', last_updated = NOW()"
+                staging_db.execute_query_with_params(
+                    "INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
+                    "VALUES (:table_name, :latest_supplier, NOW()) "
+                    "ON DUPLICATE KEY UPDATE last_processed_id = :latest_supplier, last_updated = NOW()",
+                    {'table_name': 'stg_suppliers',
+                        'latest_supplier': latest_supplier}
                 )
                 logger.debug(
                     f"Updated supplier watermark to: {latest_supplier}")
 
             if not sales_clean.empty:
                 latest_sale = sales_clean['sale_id'].max()
-                staging_db.execute_query(
-                    f"INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
-                    f"VALUES ('stg_sales', '{latest_sale}', NOW()) "
-                    f"ON DUPLICATE KEY UPDATE last_processed_id = '{latest_sale}', last_updated = NOW()"
+                staging_db.execute_query_with_params(
+                    "INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
+                    "VALUES (:table_name, :latest_sale, NOW()) "
+                    "ON DUPLICATE KEY UPDATE last_processed_id = :latest_sale, last_updated = NOW()",
+                    {'table_name': 'stg_sales', 'latest_sale': latest_sale}
                 )
                 logger.debug(f"Updated sales watermark to: {latest_sale}")
 
             if not inventory_clean.empty:
                 latest_inventory = inventory_clean['last_updated'].max().strftime(
                     '%Y-%m-%d %H:%M:%S')
-                staging_db.execute_query(
-                    f"INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
-                    f"VALUES ('stg_inventory', '{latest_inventory}', NOW()) "
-                    f"ON DUPLICATE KEY UPDATE last_processed_id = '{latest_inventory}', last_updated = NOW()"
+                staging_db.execute_query_with_params(
+                    "INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
+                    "VALUES (:table_name, :latest_inventory, NOW()) "
+                    "ON DUPLICATE KEY UPDATE last_processed_id = :latest_inventory, last_updated = NOW()",
+                    {'table_name': 'stg_inventory',
+                        'latest_inventory': latest_inventory}
                 )
                 logger.debug(
                     f"Updated inventory watermark to: {latest_inventory}")

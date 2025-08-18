@@ -4,12 +4,11 @@ from src.load.loader import run_loading
 from src.utils.exceptions import ETLError, ExtractionError, TransformationError, LoadingError
 from logger import get_logger
 
-# Initialize simple logger
 logger = get_logger("MAIN")
 
 
 def main():
-    """Main ETL process function"""
+
     logger.info("ETL process started...")
 
     try:

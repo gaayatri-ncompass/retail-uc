@@ -1,19 +1,16 @@
 from src.utils.config import get_warehouse_db_connector, get_staging_db_connector
 from logger import get_logger
 
-# Initialize logger for reset operations
 logger = get_logger("RESET_TABLES")
 
 
 def reset_etl_metadata():
-    """Reset ETL metadata in staging database"""
     logger.info("Resetting ETL metadata in staging database...")
 
     staging_db = get_staging_db_connector()
     staging_db.connect()
 
     try:
-        # Clear ETL process log
         if staging_db.execute_query("TRUNCATE TABLE etl_process_log"):
             logger.info("Cleared ETL process log (watermarks)")
         else:
@@ -41,7 +38,7 @@ def reset_etl_metadata():
 
 
 def drop_and_recreate_tables():
-    """Drop and recreate warehouse tables"""
+
     logger.info("Dropping and recreating warehouse tables...")
 
     db = get_warehouse_db_connector()
@@ -59,7 +56,7 @@ def drop_and_recreate_tables():
     ]
 
     try:
-        # Disable foreign key checks
+
         db.execute_query("SET FOREIGN_KEY_CHECKS = 0")
 
         for query in drop_queries:
@@ -192,16 +189,14 @@ def drop_and_recreate_tables():
 
 
 def main():
-    """Main function to reset both warehouse and ETL metadata"""
+
     logger.info("Starting complete ETL reset...")
     logger.info("=" * 50)
 
-    # Step 1: Reset warehouse tables
     drop_and_recreate_tables()
 
     logger.info("=" * 50)
 
-    # Step 2: Reset ETL metadata
     reset_etl_metadata()
 
     logger.info("=" * 50)
