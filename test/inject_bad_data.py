@@ -59,10 +59,10 @@ def inject_bad_data():
         updated_products = pd.concat(
             [products_df, bad_products], ignore_index=True)
         updated_products.to_csv('data/products.csv', index=False)
-        print(f"✓ Added {len(bad_products)} bad products")
+        print(f" Added {len(bad_products)} bad products")
 
     except Exception as e:
-        print(f"✗ Error with products: {e}")
+        print(f" Error with products: {e}")
 
     # Bad sales - add to existing sales.csv
     try:
