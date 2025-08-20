@@ -91,26 +91,16 @@ def inject_bad_data():
 
         updated_sales = pd.concat([sales_df, bad_sales], ignore_index=True)
         updated_sales.to_csv('data/sales.csv', index=False)
-        print(f"✓ Added {len(bad_sales)} bad sales")
+        print(f"Added {len(bad_sales)} bad sales")
 
     except Exception as e:
-        print(f"✗ Error with sales: {e}")
+        print(f"Error with sales: {e}")
 
     print("\nBad data injection complete!")
-    print("Now run: python main.py")
-    print("Then check the 'rejected_data' folder for rejected records.")
 
 
 if __name__ == "__main__":
     print("=" * 50)
     print("BAD DATA INJECTOR")
     print("=" * 50)
-    print("This will add some bad records to your CSV files.")
-    print("Your ETL should reject them and save to rejected_data folder.")
-    print()
-
-    confirm = input("Continue? (y/N): ")
-    if confirm.lower() == 'y':
-        inject_bad_data()
-    else:
-        print("Cancelled.")
+    inject_bad_data()

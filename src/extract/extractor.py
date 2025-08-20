@@ -19,21 +19,36 @@ EXPECTED_COLUMNS = {
 
 def create_etl_tables(db):
 
-    logger.info("Creating ETL tables...")
+    logger.info("Checking and creating ETL tables if needed...")
 
-    log_table_query = '''
-        CREATE TABLE IF NOT EXISTS etl_process_log (
-            table_name VARCHAR(255) PRIMARY KEY,
-            last_processed_id VARCHAR(255),
-            last_updated TIMESTAMP
-        )
-    '''
-    if not db.execute_query(log_table_query):
-        logger.error("Failed to create etl_process_log table")
-        raise DatabaseError("Failed to create etl_process_log table", "DB001")
+    # Check if etl_process_log table exists first
+    if not db.table_exists('etl_process_log'):
+        logger.info("Creating etl_process_log table...")
+        log_table_query = '''
+            CREATE TABLE IF NOT EXISTS etl_process_log (
+                table_name VARCHAR(255) PRIMARY KEY,
+                last_processed_id VARCHAR(255),
+                last_updated TIMESTAMP
+            )
+        '''
+        if not db.execute_query(log_table_query):
+            logger.error("Failed to create etl_process_log table")
+            raise DatabaseError(
+                "Failed to create etl_process_log table", "DB001")
+        logger.info("etl_process_log table created successfully")
+    else:
+        logger.info("etl_process_log table already exists, skipping creation")
 
+    # Define staging tables to check/create
+    staging_tables = ['stg_customers', 'stg_products',
+                      'stg_stores', 'stg_sales', 'stg_inventory', 'stg_suppliers']
+
+    # Check which tables exist
+    existing_tables = db.check_multiple_tables_exist(staging_tables)
+
+    # Only create tables that don't exist
     create_tables_queries = {
-        'customers': '''
+        'stg_customers': '''
             CREATE TABLE IF NOT EXISTS stg_customers (
                 customer_id VARCHAR(255),
                 customer_name VARCHAR(255),
@@ -43,7 +58,7 @@ def create_etl_tables(db):
                 signup_date VARCHAR(255)
             )
         ''',
-        'products': '''
+        'stg_products': '''
             CREATE TABLE IF NOT EXISTS stg_products (
                 product_id VARCHAR(255),
                 product_name VARCHAR(255),
@@ -51,7 +66,7 @@ def create_etl_tables(db):
                 price VARCHAR(255)
             )
         ''',
-        'stores': '''
+        'stg_stores': '''
             CREATE TABLE IF NOT EXISTS stg_stores (
                 store_id VARCHAR(255),
                 store_name VARCHAR(255),
@@ -59,7 +74,7 @@ def create_etl_tables(db):
                 manager VARCHAR(255)
             )
         ''',
-        'sales': '''
+        'stg_sales': '''
             CREATE TABLE IF NOT EXISTS stg_sales (
                 sale_id VARCHAR(255),
                 customer_id VARCHAR(255),
@@ -70,7 +85,7 @@ def create_etl_tables(db):
                 total_amount VARCHAR(255)
             )
         ''',
-        'inventory': '''
+        'stg_inventory': '''
             CREATE TABLE IF NOT EXISTS stg_inventory (
                 product_id VARCHAR(255),
                 store_id VARCHAR(255),
@@ -79,7 +94,7 @@ def create_etl_tables(db):
                 supplier_id VARCHAR(255)
             )
         ''',
-        'suppliers': '''
+        'stg_suppliers': '''
             CREATE TABLE IF NOT EXISTS stg_suppliers (
                 supplier_id VARCHAR(255),
                 supplier_name VARCHAR(255),
@@ -89,13 +104,24 @@ def create_etl_tables(db):
         '''
     }
 
-    for table, query in create_tables_queries.items():
-        if not db.execute_query(query):
-            logger.error(f"Failed to create staging table for {table}")
-            raise DatabaseError(
-                f"Failed to create staging table for {table}", "DB002")
+    tables_created = 0
+    tables_skipped = 0
 
-    logger.info("ETL tables created successfully")
+    for table_name, query in create_tables_queries.items():
+        if existing_tables.get(table_name, False):
+            logger.info(
+                f"Table {table_name} already exists, skipping creation")
+            tables_skipped += 1
+        else:
+            logger.info(f"Creating table {table_name}...")
+            if not db.execute_query(query):
+                logger.error(f"Failed to create staging table {table_name}")
+                raise DatabaseError(
+                    f"Failed to create staging table {table_name}", "DB002")
+            tables_created += 1
+
+    logger.info(
+        f"ETL tables check completed - Created: {tables_created}, Skipped: {tables_skipped}")
     return True
 
 

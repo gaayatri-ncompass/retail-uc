@@ -1,0 +1,2 @@
+sale_id,customer_id,product_id,store_id,sale_date,quantity,total_amount,sale_date_key,payment_type,channel,rejection_reason,rejection_timestamp
+BAD_SALE_002,CUST1000,PROD1000,STORE100,,abc,xyz,,Credit Card,In-Store,Invalid quantity: abc; Cannot calculate unit_price from total_amount: xyz; Invalid total_amount: xyz,2025-08-20 11:00:43.333982
