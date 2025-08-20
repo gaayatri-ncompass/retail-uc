@@ -13,7 +13,6 @@ class DBConnector:
         self.password = password or 'deva'
         self.database = database or 'stagingdb'
         self.engine = None
-        logger.debug(f"Initialized DBConnector for database: {self.database}")
 
     def connect(self):
 
@@ -42,14 +41,8 @@ class DBConnector:
             logger.error("Query aborted. No database connection.")
             return None
         try:
-            logger.debug(
-                f"Executing parameterized query: {sql_query[:100]}...")
-            if params:
-                logger.debug(f"Parameters: {params}")
             result = pd.read_sql_query(
                 text(sql_query), self.engine, params=params)
-            logger.debug(
-                f"Query executed successfully, returned {len(result)} rows")
             return result
         except Exception as e:
             error_msg = f"Parameterized query failed: {e}"
@@ -63,14 +56,9 @@ class DBConnector:
             logger.error("Query aborted. No database connection.")
             return False
         try:
-            logger.debug(
-                f"Executing parameterized command: {sql_query[:100]}...")
-            if params:
-                logger.debug(f"Parameters: {params}")
             with self.engine.connect() as connection:
                 connection.execute(text(sql_query), params)
                 connection.commit()
-            logger.debug("Parameterized command executed successfully")
             return True
         except Exception as e:
             error_msg = f"Parameterized query execution failed: {e}"
@@ -84,10 +72,7 @@ class DBConnector:
             logger.error("Query aborted. No database connection.")
             return None
         try:
-            logger.debug(f"Executing query: {sql_query[:100]}...")
             result = pd.read_sql_query(text(sql_query), self.engine)
-            logger.debug(
-                f"Query executed successfully, returned {len(result)} rows")
             return result
         except Exception as e:
             error_msg = f"Query failed: {e}"
@@ -101,11 +86,9 @@ class DBConnector:
             logger.error("Query aborted. No database connection.")
             return False
         try:
-            logger.debug(f"Executing command: {sql_query[:100]}...")
             with self.engine.connect() as connection:
                 connection.execute(text(sql_query))
                 connection.commit()
-            logger.debug("Command executed successfully")
             return True
         except Exception as e:
             error_msg = f"Query execution failed: {e}"

@@ -3,7 +3,7 @@ from .exceptions import ExtractionError
 import logging
 from logger import get_logger
 
-# Initialize logger for validation operations
+
 logger = get_logger("VALIDATOR")
 
 
@@ -72,7 +72,6 @@ def validate_data(data, schema):
 
     validator = Validator(schema)
     if validator.validate(data):
-        logger.debug("Data validation passed.")
         return True
     else:
         raise ExtractionError(
@@ -104,6 +103,5 @@ def validate_dataframe(df, table_name):
             logger.warning(f"... and {error_count - 3} more errors")
         return False
     else:
-        logger.info(
-            f" Validation passed for {table_name}: {len(df)} rows valid")
+
         return True

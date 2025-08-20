@@ -1,16 +1,38 @@
 import logging
 from datetime import datetime
 import os
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
+
+
+def get_log_level():
+    return os.getenv('ETL_LOG_LEVEL', 'INFO').upper()
 
 
 class SimpleLogger:
-    def __init__(self, name="ETL"):
+    def __init__(self, name="ETL", log_level="INFO"):
         self.name = name
+        self.log_level = log_level.upper()
+
+        self.levels = {
+            "DEBUG": 0,
+            "INFO": 1,
+            "WARNING": 2,
+            "ERROR": 3,
+            "CRITICAL": 4
+        }
+
+        self.current_level = self.levels.get(self.log_level, 1)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.log_file = f"logs/etl_app_{timestamp}.log"
 
     def _log(self, level, message):
+        level_value = self.levels.get(level, 1)
+        if level_value < self.current_level:
+            return
+
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         log_message = f"[{timestamp}] [{self.name}] [{level}] {message}"
 
@@ -37,6 +59,11 @@ class SimpleLogger:
     def critical(self, message):
         self._log("CRITICAL", message)
 
+    def set_level(self, level):
 
-def get_logger(name="ETL"):
-    return SimpleLogger(name)
+        self.log_level = level.upper()
+        self.current_level = self.levels.get(self.log_level, 1)
+
+
+def get_logger(name="ETL", log_level="INFO"):
+    return SimpleLogger(name, log_level)

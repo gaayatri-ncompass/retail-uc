@@ -8,133 +8,236 @@ from logger import get_logger
 logger = get_logger("TRANSFORMER")
 
 
-def clean_customer_data(df):
+def get_staging_tables_schema(staging_db):
 
-    logger.debug(f"Cleaning customer data: {len(df)} records")
+    tables_query = """
+    SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, IS_NULLABLE
+    FROM INFORMATION_SCHEMA.COLUMNS 
+    WHERE TABLE_SCHEMA = DATABASE() 
+    AND TABLE_NAME LIKE 'stg_%'
+    ORDER BY TABLE_NAME, ORDINAL_POSITION
+    """
 
-    if df.empty:
-        return df
+    primary_keys_query = """
+    SELECT TABLE_NAME, COLUMN_NAME
+    FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+    WHERE TABLE_SCHEMA = DATABASE()
+    AND CONSTRAINT_NAME = 'PRIMARY'
+    AND TABLE_NAME LIKE 'stg_%'
+    """
 
-    df = df.drop_duplicates(subset=['customer_id'])
+    schema_info = staging_db.run_query(tables_query)
+    primary_keys_info = staging_db.run_query(primary_keys_query)
 
-    df.loc[:, 'email'] = df['email'].str.lower().str.strip()
-    df.loc[:, 'phone'] = df['phone'].str.replace(r'[^\d+]', '', regex=True)
-    df.loc[:, 'address'] = df['address'].str.strip()
-    df.loc[:, 'signup_date'] = pd.to_datetime(
-        df['signup_date'], errors='coerce')
+    primary_keys_map = {}
+    if primary_keys_info is not None and not primary_keys_info.empty:
+        for _, row in primary_keys_info.iterrows():
+            primary_keys_map[row['TABLE_NAME']] = row['COLUMN_NAME']
 
-    initial_count = len(df)
-    df = df.dropna(subset=['signup_date'])
-    dropped_count = initial_count - len(df)
+    tables_config = {}
 
-    if dropped_count > 0:
-        logger.warning(
-            f"Dropped {dropped_count} customer records with invalid dates")
+    for _, row in schema_info.iterrows():
+        table_name = row['TABLE_NAME']
+        column_name = row['COLUMN_NAME']
+        data_type = row['DATA_TYPE'].lower()
 
-    logger.debug(f"Customer data cleaned: {len(df)} records remaining")
-    return df
+        business_table = table_name.replace('stg_', '')
 
+        if business_table not in tables_config:
+            tables_config[business_table] = {
+                'staging_table': table_name,
+                'columns': {},
+                'key_column': None,
+                'watermark_column': None
+            }
 
-def clean_product_data(df):
+        tables_config[business_table]['columns'][column_name] = {
+            'data_type': data_type,
+            'is_nullable': row['IS_NULLABLE']
+        }
 
-    if df.empty:
-        return df
+        if table_name in primary_keys_map and primary_keys_map[table_name] == column_name:
+            tables_config[business_table]['key_column'] = column_name
+            tables_config[business_table]['watermark_column'] = column_name
+            logger.info(
+                f"Found primary key for {business_table}: {column_name}")
 
-    df = df.drop_duplicates(subset=['product_id'])
+        elif column_name in ['last_updated', 'updated_at', 'modified_date', 'created_at']:
+            if not tables_config[business_table]['watermark_column']:
+                tables_config[business_table]['watermark_column'] = column_name
+                logger.info(
+                    f"Found timestamp watermark for {business_table}: {column_name}")
 
-    df.loc[:, 'product_name'] = df['product_name'].str.strip()
-    df.loc[:, 'category'] = df['category'].str.strip()
-    df.loc[:, 'price'] = pd.to_numeric(df['price'], errors='coerce')
+    # Fallback: if no primary key or timestamp found, use first _id column as watermark
+    for business_table, config in tables_config.items():
+        if not config['watermark_column']:
+            # Look for any column ending with _id as fallback
+            for column_name in config['columns'].keys():
+                if column_name.endswith('_id'):
+                    config['watermark_column'] = column_name
+                    config['key_column'] = column_name
+                    logger.info(
+                        f"Using fallback watermark for {business_table}: {column_name}")
+                    break
 
-    df = df.dropna(subset=['price'])
+            if not config['watermark_column']:
+                logger.warning(
+                    f"No suitable watermark column found for {business_table}")
 
-    return df
-
-
-def clean_store_data(df):
-
-    if df.empty:
-        return df
-
-    df = df.drop_duplicates(subset=['store_id'])
-
-    df.loc[:, 'store_name'] = df['store_name'].str.strip()
-    df.loc[:, 'location'] = df['location'].str.strip()
-
-    return df
-
-
-def clean_supplier_data(df):
-
-    if df.empty:
-        return df
-
-    df = df.drop_duplicates(subset=['supplier_id'])
-
-    df.loc[:, 'supplier_name'] = df['supplier_name'].str.strip()
-    df.loc[:, 'contact_name'] = df['contact_name'].str.strip()
-
-    return df
-
-
-def clean_sales_data(df):
-
-    if df.empty:
-        return df
-
-    df = df.drop_duplicates(subset=['sale_id'])
-
-    df.loc[:, 'quantity'] = pd.to_numeric(df['quantity'], errors='coerce')
-    df.loc[:, 'total_amount'] = pd.to_numeric(
-        df['total_amount'], errors='coerce')
-    df.loc[:, 'sale_date'] = pd.to_datetime(df['sale_date'], errors='coerce')
-
-    df = df.dropna(subset=['quantity', 'total_amount', 'sale_date'])
-
-    df.loc[:, 'payment_type'] = 'Credit Card'
-    df.loc[:, 'channel'] = 'In-Store'
-
-    return df
+    return tables_config
 
 
-def clean_inventory_data(df):
+def clean_data_by_schema(df, table_name, schema_config):
 
     if df.empty:
         return df
 
-    df = df.drop_duplicates(subset=['product_id', 'store_id', 'last_updated'])
+    columns_info = schema_config['columns']
+    key_column = schema_config['key_column']
 
-    df.loc[:, 'stock_level'] = pd.to_numeric(
-        df['stock_level'], errors='coerce')
-    df.loc[:, 'last_updated'] = pd.to_datetime(
-        df['last_updated'], errors='coerce')
+    if key_column and key_column in df.columns:
+        df = df.drop_duplicates(subset=[key_column])
 
-    df = df.dropna(subset=['stock_level', 'last_updated'])
+    for column, col_info in columns_info.items():
+        if column not in df.columns:
+            continue
+
+        data_type = col_info['data_type']
+        if data_type in ['date', 'datetime', 'timestamp'] or 'date' in column.lower():
+            df[column] = pd.to_datetime(df[column], errors='coerce')
+
+            if df[column].dtype == 'object':
+                df[column] = pd.to_datetime(df[column])
+
+            # For sales table, also create a date_key column for easier joins with dimdate
+            if table_name == 'sales' and column == 'sale_date':
+                df['sale_date_key'] = df[column].apply(get_date_key_from_date)
+
+            if col_info['is_nullable'] == 'NO':
+                initial_count = len(df)
+                df = df.dropna(subset=[column])
+                dropped = initial_count - len(df)
+                if dropped > 0:
+                    logger.warning(
+                        f"Dropped {dropped} records with invalid {column} in {table_name}")
+
+        elif data_type in ['varchar', 'char', 'text', 'string']:
+            df.loc[:, column] = df[column].astype(str).str.strip()
+
+            # handling for email
+            if 'email' in column.lower():
+                df.loc[:, column] = df[column].str.lower()
+
+            #  handling for phone
+            if 'phone' in column.lower():
+                df.loc[:, column] = df[column].str.replace(
+                    r'[^\d+]', '', regex=True)
+
+        # Numeric columns
+        elif data_type in ['int', 'bigint', 'decimal', 'float', 'double', 'numeric']:
+            df.loc[:, column] = pd.to_numeric(df[column], errors='coerce')
+
+            if col_info['is_nullable'] == 'NO' and column != key_column:
+                initial_count = len(df)
+                df = df.dropna(subset=[column])
+                dropped = initial_count - len(df)
+                if dropped > 0:
+                    logger.warning(
+                        f"Dropped {dropped} records with invalid {column} in {table_name}")
+
+    if table_name == 'sales':
+
+        if 'payment_type' not in df.columns:
+            df['payment_type'] = 'Credit Card'
+        else:
+            df.loc[:, 'payment_type'] = df['payment_type'].fillna(
+                'Credit Card')
+
+        if 'channel' not in df.columns:
+            df['channel'] = 'In-Store'
+        else:
+            df.loc[:, 'channel'] = df['channel'].fillna('In-Store')
 
     return df
 
 
-def create_date_dimension(start_date, end_date):
+def get_watermark(staging_db, table_name, schema_config):
 
-    date_range = pd.date_range(start=start_date, end=end_date, freq='D')
+    staging_table = schema_config['staging_table']
+    watermark_column = schema_config['watermark_column']
 
-    date_dim = pd.DataFrame({
-        'full_date': date_range,
-        'year': date_range.year,
-        'month': date_range.month,
-        'day': date_range.day,
-        'quarter': date_range.quarter,
-        'week': date_range.isocalendar().week
-    })
+    watermark = staging_db.run_query(
+        f"SELECT last_processed_id FROM etl_process_log WHERE table_name = '{staging_table}'"
+    )
 
-    date_dim['date_key'] = date_dim['full_date'].dt.strftime(
-        '%Y%m%d').astype(int)
+    if watermark is not None and not watermark.empty:
+        return watermark.iloc[0]['last_processed_id']
+    else:
 
-    return date_dim
+        if watermark_column in ['last_updated', 'updated_at', 'modified_date', 'created_at']:
+            return '1900-01-01 00:00:00'
+        else:
+            return ''
+
+
+def extract_incremental_data(staging_db, table_name, schema_config):
+
+    staging_table = schema_config['staging_table']
+    watermark_column = schema_config['watermark_column']
+    last_value = get_watermark(staging_db, table_name, schema_config)
+
+    query = f"SELECT * FROM {staging_table} WHERE {watermark_column} > :watermark ORDER BY {watermark_column}"
+
+    df = staging_db.run_query_with_params(query, {'watermark': last_value})
+    return df if df is not None else pd.DataFrame()
+
+
+def update_watermark(staging_db, table_name, schema_config, df):
+
+    if df.empty:
+        return
+
+    staging_table = schema_config['staging_table']
+    watermark_column = schema_config['watermark_column']
+
+    latest_value = df[watermark_column].max()
+
+    if watermark_column in ['last_updated', 'updated_at', 'modified_date', 'created_at']:
+
+        if isinstance(latest_value, str):
+            latest_value = pd.to_datetime(latest_value)
+
+        latest_value = latest_value.strftime('%Y-%m-%d %H:%M:%S')
+
+    result = staging_db.execute_query_with_params(
+        "INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
+        "VALUES (:table_name, :latest_value, NOW()) "
+        "ON DUPLICATE KEY UPDATE last_processed_id = :latest_value, last_updated = NOW()",
+        {'table_name': staging_table, 'latest_value': latest_value}
+    )
+
+    if not result:
+        raise DatabaseError(
+            f"Failed to update watermark for {table_name}", f"DB_{table_name}")
+
+
+def get_date_key_from_date(date_value):
+
+    if pd.isna(date_value):
+        return None
+
+    if isinstance(date_value, str):
+        date_value = pd.to_datetime(date_value, errors='coerce')
+
+    if pd.isna(date_value):
+        return None
+
+    return int(date_value.strftime('%Y%m%d'))
 
 
 def create_promotion_dimension():
-    pass
+
+    return pd.DataFrame()
 
 
 def transform_data():
@@ -149,222 +252,63 @@ def transform_data():
         staging_db.connect()
         warehouse_db.connect()
 
+        logger.info("Extracting table schema from staging database...")
+        tables_config = get_staging_tables_schema(staging_db)
+
+        logger.info(
+            f"Found {len(tables_config)} staging tables: {list(tables_config.keys())}")
+
+        logger.info(
+            "Reading incremental data from staging tables using metadata...")
+
+        transformed_data = {}
+
+        for table_name, schema_config in tables_config.items():
+            try:
+                logger.info(f"Processing {table_name} data...")
+
+                raw_df = extract_incremental_data(
+                    staging_db, table_name, schema_config)
+
+                cleaned_df = clean_data_by_schema(
+                    raw_df, table_name, schema_config)
+
+                transformed_data[table_name] = cleaned_df
+                logger.info(
+                    f"Processed {len(cleaned_df)} records for {table_name}")
+
+            except Exception as e:
+                logger.error(f"Failed to process {table_name}: {str(e)}")
+                raise DatabaseError(
+                    f"Failed to extract {table_name} data: {str(e)}", "DB004")
+
+        logger.info("Creating dimensions...")
         try:
-            logger.info(
-                "Reading incremental data from staging tables using metadata...")
 
-            customers_watermark = staging_db.run_query(
-                "SELECT last_processed_id FROM etl_process_log WHERE table_name = 'stg_customers'"
-            )
-            products_watermark = staging_db.run_query(
-                "SELECT last_processed_id FROM etl_process_log WHERE table_name = 'stg_products'"
-            )
-            stores_watermark = staging_db.run_query(
-                "SELECT last_processed_id FROM etl_process_log WHERE table_name = 'stg_stores'"
-            )
-            suppliers_watermark = staging_db.run_query(
-                "SELECT last_processed_id FROM etl_process_log WHERE table_name = 'stg_suppliers'"
-            )
-            sales_watermark = staging_db.run_query(
-                "SELECT last_processed_id FROM etl_process_log WHERE table_name = 'stg_sales'"
-            )
-            inventory_watermark = staging_db.run_query(
-                "SELECT last_processed_id FROM etl_process_log WHERE table_name = 'stg_inventory'"
-            )
-
-            customer_last_id = customers_watermark.iloc[0][
-                'last_processed_id'] if customers_watermark is not None and not customers_watermark.empty else 'CUST0'
-            product_last_id = products_watermark.iloc[0][
-                'last_processed_id'] if products_watermark is not None and not products_watermark.empty else 'PROD0'
-            store_last_id = stores_watermark.iloc[0][
-                'last_processed_id'] if stores_watermark is not None and not stores_watermark.empty else 'STORE0'
-            supplier_last_id = suppliers_watermark.iloc[0][
-                'last_processed_id'] if suppliers_watermark is not None and not suppliers_watermark.empty else 'SUP0'
-            sales_last_id = sales_watermark.iloc[0]['last_processed_id'] if sales_watermark is not None and not sales_watermark.empty else 'SALE0'
-            inventory_last_id = inventory_watermark.iloc[0][
-                'last_processed_id'] if inventory_watermark is not None and not inventory_watermark.empty else '1900-01-01'
-
-            logger.debug(
-                f"Metadata watermarks - Customer: {customer_last_id}, Product: {product_last_id}, Store: {store_last_id}, Supplier: {supplier_last_id}, Sales: {sales_last_id}, Inventory: {inventory_last_id}")
-
-            customers_df = staging_db.run_query_with_params(
-                "SELECT * FROM stg_customers WHERE customer_id > :customer_id ORDER BY customer_id",
-                {'customer_id': customer_last_id})
-            products_df = staging_db.run_query_with_params(
-                "SELECT * FROM stg_products WHERE product_id > :product_id ORDER BY product_id",
-                {'product_id': product_last_id})
-            stores_df = staging_db.run_query_with_params(
-                "SELECT * FROM stg_stores WHERE store_id > :store_id ORDER BY store_id",
-                {'store_id': store_last_id})
-            suppliers_df = staging_db.run_query_with_params(
-                "SELECT * FROM stg_suppliers WHERE supplier_id > :supplier_id ORDER BY supplier_id",
-                {'supplier_id': supplier_last_id})
-            sales_df = staging_db.run_query_with_params(
-                "SELECT * FROM stg_sales WHERE sale_id > :sale_id ORDER BY sale_id",
-                {'sale_id': sales_last_id})
-            inventory_df = staging_db.run_query_with_params(
-                "SELECT * FROM stg_inventory WHERE last_updated > :last_updated ORDER BY last_updated",
-                {'last_updated': inventory_last_id})
-
-            if customers_df is None:
-                customers_df = pd.DataFrame()
-            if products_df is None:
-                products_df = pd.DataFrame()
-            if stores_df is None:
-                stores_df = pd.DataFrame()
-            if suppliers_df is None:
-                suppliers_df = pd.DataFrame()
-            if sales_df is None:
-                sales_df = pd.DataFrame()
-            if inventory_df is None:
-                inventory_df = pd.DataFrame()
-
-            logger.info(
-                f"Incremental data found: customers={len(customers_df)}, products={len(products_df)}, stores={len(stores_df)}, suppliers={len(suppliers_df)}, sales={len(sales_df)}, inventory={len(inventory_df)}")
-
-        except Exception as e:
-            logger.error(f"Failed to extract data from staging: {str(e)}")
-            raise DatabaseError(
-                f"Failed to extract data from staging: {str(e)}", "DB004")
-
-        try:
-            logger.info("Cleaning customer data...")
-            customers_clean = clean_customer_data(customers_df)
-
-            logger.info("Cleaning product data...")
-            products_clean = clean_product_data(products_df)
-
-            logger.info("Cleaning store data...")
-            stores_clean = clean_store_data(stores_df)
-
-            logger.info("Cleaning supplier data...")
-            suppliers_clean = clean_supplier_data(suppliers_df)
-
-            logger.info("Cleaning sales data...")
-            sales_clean = clean_sales_data(sales_df)
-
-            logger.info("Cleaning inventory data...")
-            inventory_clean = clean_inventory_data(inventory_df)
-        except Exception as e:
-            logger.error(f"Data cleaning failed: {str(e)}")
-            raise TransformationError(
-                f"Data cleaning failed: {str(e)}", "TRF001")
-
-        try:
-            logger.info("Creating date dimension...")
-            if not sales_clean.empty and not inventory_clean.empty:
-                min_date = min(sales_clean['sale_date'].min(
-                ), inventory_clean['last_updated'].min())
-                max_date = max(sales_clean['sale_date'].max(
-                ), inventory_clean['last_updated'].max())
-            elif not sales_clean.empty:
-                min_date = sales_clean['sale_date'].min()
-                max_date = sales_clean['sale_date'].max()
-            elif not inventory_clean.empty:
-                min_date = inventory_clean['last_updated'].min()
-                max_date = inventory_clean['last_updated'].max()
-            else:
-                min_date = pd.Timestamp('2020-01-01')
-                max_date = pd.Timestamp('2030-12-31')
-
-            min_date = min_date - pd.DateOffset(years=1)
-
-            max_date = max_date + pd.DateOffset(years=2)
-
-            logger.debug(
-                f"Creating date dimension from {min_date.date()} to {max_date.date()}")
-            date_dim = create_date_dimension(min_date, max_date)
-
-            logger.info("Creating promotion dimension...")
-            promotion_dim = create_promotion_dimension()
+            transformed_data['promotions'] = create_promotion_dimension()
+            logger.info("Promotion dimension created successfully")
         except Exception as e:
             logger.error(f"Dimension creation failed: {str(e)}")
             raise TransformationError(
                 f"Dimension creation failed: {str(e)}", "TRF002")
 
-        transformed_data = {
-            'customers': customers_clean,
-            'products': products_clean,
-            'stores': stores_clean,
-            'suppliers': suppliers_clean,
-            'sales': sales_clean,
-            'inventory': inventory_clean,
-            'dates': date_dim,
-            'promotions': promotion_dim
-        }
-
+        # Update watermarks for all tables
+        logger.info("Updating ETL metadata watermarks...")
         try:
-            logger.info("Updating ETL metadata watermarks...")
+            for table_name, schema_config in tables_config.items():
+                if not transformed_data[table_name].empty:
+                    update_watermark(staging_db, table_name,
+                                     schema_config, transformed_data[table_name])
 
-            if not customers_clean.empty:
-                latest_customer = customers_clean['customer_id'].max()
-                staging_db.execute_query_with_params(
-                    "INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
-                    "VALUES (:table_name, :latest_customer, NOW()) "
-                    "ON DUPLICATE KEY UPDATE last_processed_id = :latest_customer, last_updated = NOW()",
-                    {'table_name': 'stg_customers',
-                        'latest_customer': latest_customer}
-                )
-                logger.debug(
-                    f"Updated customer watermark to: {latest_customer}")
-
-            if not products_clean.empty:
-                latest_product = products_clean['product_id'].max()
-                staging_db.execute_query_with_params(
-                    "INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
-                    "VALUES (:table_name, :latest_product, NOW()) "
-                    "ON DUPLICATE KEY UPDATE last_processed_id = :latest_product, last_updated = NOW()",
-                    {'table_name': 'stg_products', 'latest_product': latest_product}
-                )
-                logger.debug(f"Updated product watermark to: {latest_product}")
-
-            if not stores_clean.empty:
-                latest_store = stores_clean['store_id'].max()
-                staging_db.execute_query_with_params(
-                    "INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
-                    "VALUES (:table_name, :latest_store, NOW()) "
-                    "ON DUPLICATE KEY UPDATE last_processed_id = :latest_store, last_updated = NOW()",
-                    {'table_name': 'stg_stores', 'latest_store': latest_store}
-                )
-                logger.debug(f"Updated store watermark to: {latest_store}")
-
-            if not suppliers_clean.empty:
-                latest_supplier = suppliers_clean['supplier_id'].max()
-                staging_db.execute_query_with_params(
-                    "INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
-                    "VALUES (:table_name, :latest_supplier, NOW()) "
-                    "ON DUPLICATE KEY UPDATE last_processed_id = :latest_supplier, last_updated = NOW()",
-                    {'table_name': 'stg_suppliers',
-                        'latest_supplier': latest_supplier}
-                )
-                logger.debug(
-                    f"Updated supplier watermark to: {latest_supplier}")
-
-            if not sales_clean.empty:
-                latest_sale = sales_clean['sale_id'].max()
-                staging_db.execute_query_with_params(
-                    "INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
-                    "VALUES (:table_name, :latest_sale, NOW()) "
-                    "ON DUPLICATE KEY UPDATE last_processed_id = :latest_sale, last_updated = NOW()",
-                    {'table_name': 'stg_sales', 'latest_sale': latest_sale}
-                )
-                logger.debug(f"Updated sales watermark to: {latest_sale}")
-
-            if not inventory_clean.empty:
-                latest_inventory = inventory_clean['last_updated'].max().strftime(
-                    '%Y-%m-%d %H:%M:%S')
-                staging_db.execute_query_with_params(
-                    "INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) "
-                    "VALUES (:table_name, :latest_inventory, NOW()) "
-                    "ON DUPLICATE KEY UPDATE last_processed_id = :latest_inventory, last_updated = NOW()",
-                    {'table_name': 'stg_inventory',
-                        'latest_inventory': latest_inventory}
-                )
-                logger.debug(
-                    f"Updated inventory watermark to: {latest_inventory}")
+            logger.info("ETL metadata watermarks updated successfully")
 
         except Exception as e:
-            logger.warning(f"Failed to update ETL metadata: {e}")
+            logger.critical(
+                f"CRITICAL: Failed to update ETL metadata watermarks - {str(e)}")
+            logger.critical(
+                "This failure will cause data duplication on next run. Process terminated.")
+            raise DatabaseError(
+                f"Critical failure updating ETL watermarks: {str(e)}", "DB011")
 
         logger.info("Data transformation completed successfully!")
         return transformed_data

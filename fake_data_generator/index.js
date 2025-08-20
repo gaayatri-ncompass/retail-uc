@@ -260,7 +260,7 @@ async function getLatestCounters() {
                 const customerNumber = parseInt(lastCustomer.replace('CUST', ''));
                 if (!isNaN(customerNumber)) {
                     counters.customers = customerNumber + 1;
-                    console.log(`📊 Latest customer ID: ${lastCustomer} -> Next: CUST${counters.customers}`);
+                    console.log(`Latest customer ID: ${lastCustomer} -> Next: CUST${counters.customers}`);
                 }
             }
         }
@@ -274,7 +274,7 @@ async function getLatestCounters() {
                 const productNumber = parseInt(lastProduct.replace('PROD', ''));
                 if (!isNaN(productNumber)) {
                     counters.products = productNumber + 1;
-                    console.log(`📊 Latest product ID: ${lastProduct} -> Next: PROD${counters.products}`);
+                    console.log(` Latest product ID: ${lastProduct} -> Next: PROD${counters.products}`);
                 }
             }
         }
@@ -288,7 +288,7 @@ async function getLatestCounters() {
                 const salesNumber = parseInt(lastSale.replace('SALE', ''));
                 if (!isNaN(salesNumber)) {
                     counters.sales.sale = salesNumber + 1;
-                    console.log(`📊 Latest sales ID: ${lastSale} -> Next: SALE${counters.sales.sale}`);
+                    console.log(` Latest sales ID: ${lastSale} -> Next: SALE${counters.sales.sale}`);
                 }
             }
         }
@@ -302,7 +302,7 @@ async function getLatestCounters() {
                 const storeNumber = parseInt(lastStore.replace('STORE', ''));
                 if (!isNaN(storeNumber)) {
                     counters.stores = storeNumber + 1;
-                    console.log(`📊 Latest store ID: ${lastStore} -> Next: STORE${counters.stores}`);
+                    console.log(` Latest store ID: ${lastStore} -> Next: STORE${counters.stores}`);
                 }
             }
         }
@@ -316,7 +316,7 @@ async function getLatestCounters() {
                 const supplierNumber = parseInt(lastSupplier.replace('SUP', ''));
                 if (!isNaN(supplierNumber)) {
                     counters.suppliers = supplierNumber + 1;
-                    console.log(`📊 Latest supplier ID: ${lastSupplier} -> Next: SUP${counters.suppliers}`);
+                    console.log(` Latest supplier ID: ${lastSupplier} -> Next: SUP${counters.suppliers}`);
                 }
             }
         }

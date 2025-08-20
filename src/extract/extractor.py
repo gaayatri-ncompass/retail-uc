@@ -106,10 +106,18 @@ def load_csv_to_staging(db, file_name, table_name, pk_column):
     try:
         chunk_size = 1000
         total_processed = 0
+        chunks_validated = 0
+        validation_passed = 0
+
+        log_query = "SELECT last_processed_id FROM etl_process_log WHERE table_name = :table_name"
+        last_id_df = db.run_query_with_params(
+            log_query, {'table_name': table_name})
+
+        last_processed_id = None
+        if last_id_df is not None and not last_id_df.empty:
+            last_processed_id = last_id_df['last_processed_id'].iloc[0]
 
         for chunk_num, df_chunk in enumerate(pd.read_csv(f'data/{file_name}', dtype=str, chunksize=chunk_size), 1):
-            logger.debug(
-                f"Processing chunk {chunk_num} ({len(df_chunk)} records)...")
 
             if chunk_num == 1:
                 expected_cols = EXPECTED_COLUMNS.get(table_name, [])
@@ -123,22 +131,12 @@ def load_csv_to_staging(db, file_name, table_name, pk_column):
                             f"Missing expected columns in {file_name}: {missing_cols}")
                         raise ExtractionError(
                             f"Missing expected columns in {file_name}: {missing_cols}")
-                    logger.debug(
-                        f"Filtered CSV to expected columns: {expected_cols}")
 
             expected_cols = EXPECTED_COLUMNS.get(table_name, [])
             if expected_cols:
                 df_chunk = df_chunk[expected_cols]
 
             df_chunk.drop_duplicates(inplace=True)
-
-            log_query = "SELECT last_processed_id FROM etl_process_log WHERE table_name = :table_name"
-            last_id_df = db.run_query_with_params(
-                log_query, {'table_name': table_name})
-
-            last_processed_id = None
-            if last_id_df is not None and not last_id_df.empty:
-                last_processed_id = last_id_df['last_processed_id'].iloc[0]
 
             if last_processed_id:
                 df_to_insert = df_chunk[df_chunk[pk_column]
@@ -147,14 +145,15 @@ def load_csv_to_staging(db, file_name, table_name, pk_column):
                 df_to_insert = df_chunk
 
             if df_to_insert.empty:
-                logger.debug(f"No new records in chunk {chunk_num}")
                 continue
 
-            logger.debug(f"Validating {len(df_to_insert)} new records...")
+            chunks_validated += 1
             is_valid = validate_dataframe(df_to_insert, table_name)
-            if not is_valid:
+            if is_valid:
+                validation_passed += 1
+            else:
                 logger.warning(
-                    f"Data validation issues found for {table_name}")
+                    f"Data validation issues found for {table_name} chunk {chunk_num}")
 
             table_full_name = f'stg_{table_name}'
             df_to_insert.to_sql(name=table_full_name,
@@ -162,8 +161,10 @@ def load_csv_to_staging(db, file_name, table_name, pk_column):
 
             chunk_processed = len(df_to_insert)
             total_processed += chunk_processed
-            logger.debug(
-                f"Inserted {chunk_processed} records from chunk {chunk_num}")
+
+        if chunks_validated > 0:
+            logger.info(
+                f"Validation summary for {table_name}: {validation_passed}/{chunks_validated} chunks passed validation")
 
         logger.info(
             f"Total new records processed for {table_name}: {total_processed}")
@@ -184,7 +185,6 @@ def load_csv_to_staging(db, file_name, table_name, pk_column):
                     'table_name': table_name,
                     'max_id': max_id
                 })
-                logger.debug(f"Updated ETL log with max ID: {max_id}")
 
         return True
 

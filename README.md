@@ -83,7 +83,15 @@ Reset and create all tables:
 python reset_tables.py
 ```
 
-### 2. Run Initial ETL Load
+### 2. Create Date Dimension
+
+Generate the comprehensive date dimension (1990-2040):
+
+```bash
+python create_date_dimension.py
+```
+
+### 3. Run Initial ETL Load
 
 Execute the full ETL pipeline:
 
@@ -91,7 +99,7 @@ Execute the full ETL pipeline:
 python main.py
 ```
 
-### 3. Generate New Data
+### 4. Generate New Data
 
 Start continuous data generation:
 
@@ -105,13 +113,16 @@ node index.js
 ### Manual ETL Execution
 
 ```bash
+# Initialize database and create tables
+python reset_tables.py
+
+# Create comprehensive date dimension (1990-2040)
+python create_date_dimension.py
+
 # Run complete ETL pipeline
 python main.py
 
-# Reset all tables and metadata
-python reset_tables.py
-
-# Run with scheduling (every 30 minutes)
+# Run with scheduling (every 10 seconds)
 python run_scheduler.py
 ```
 

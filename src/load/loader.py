@@ -1,5 +1,6 @@
 from src.utils.exceptions import LoadingError, DatabaseError
 from src.utils.config import get_warehouse_db_connector
+from src.utils.rejected_data_handler import save_rejected_sales_data, save_rejected_inventory_data, save_rejected_dimension_data
 from sqlalchemy import text
 import logging
 import traceback
@@ -226,6 +227,12 @@ def load_dimension_table(db, df, table_name, key_column, batch_size=1000):
             except Exception as e:
                 logger.error(
                     f"Error inserting batch {i//batch_size + 1} into {table_name}: {e}")
+
+                # Save failed batch to rejected data folder
+                batch_error_reason = f"Database insertion failed: {str(e)}"
+                save_rejected_dimension_data(
+                    batch, table_name, batch_error_reason)
+
                 continue
 
         if total_loaded > 0:
@@ -393,11 +400,32 @@ def load_fact_sales(db, sales_df, batch_size=1000):
                             f"Sample missing sale_dates: {missing_dates}")
 
             initial_count = len(fact_df)
+
+            # Save rejected records before dropping them
+            rejected_records = fact_df[fact_df[key_columns].isnull().any(
+                axis=1)]
+            if not rejected_records.empty:
+                # Collect information about missing keys
+                missing_keys_info = {}
+                for col in key_columns:
+                    null_count = rejected_records[col].isnull().sum()
+                    if null_count > 0:
+                        missing_keys_info[col] = null_count
+
+                # Save rejected data to CSV
+                save_rejected_sales_data(
+                    rejected_records,
+                    "Missing dimension keys",
+                    missing_keys_info
+                )
+
             fact_df.dropna(subset=key_columns, inplace=True)
             dropped_count = initial_count - len(fact_df)
             if dropped_count > 0:
                 logger.warning(
                     f"Dropped {dropped_count} records due to missing dimension keys")
+                logger.warning(
+                    f"Rejected records saved to rejected_data folder")
 
             if fact_df.empty:
                 logger.info(
@@ -518,6 +546,11 @@ def load_fact_sales(db, sales_df, batch_size=1000):
                 except Exception as batch_error:
                     logger.error(
                         f"Error loading batch {i//actual_batch_size + 1}: {batch_error}")
+
+                    # Save failed batch to rejected data folder
+                    failed_batch = batch.copy()
+                    batch_error_reason = f"Database insertion failed: {str(batch_error)}"
+                    save_rejected_sales_data(failed_batch, batch_error_reason)
             logger.info(
                 f"Successfully loaded {total_loaded} sales records to warehouse")
             return True
@@ -654,11 +687,31 @@ def load_fact_inventory(db, inventory_df, batch_size=1000):
                     f"Some inventory records have missing dimension keys: {null_counts.to_dict()}")
 
             initial_count = len(fact_df)
+
+            # Save rejected records before dropping them
+            rejected_records = fact_df[fact_df[key_cols].isnull().any(axis=1)]
+            if not rejected_records.empty:
+                # Collect information about missing keys
+                missing_keys_info = {}
+                for col in key_cols:
+                    null_count = rejected_records[col].isnull().sum()
+                    if null_count > 0:
+                        missing_keys_info[col] = null_count
+
+                # Save rejected data to CSV
+                save_rejected_inventory_data(
+                    rejected_records,
+                    "Missing dimension keys",
+                    missing_keys_info
+                )
+
             fact_df.dropna(subset=key_cols, inplace=True)
             dropped_count = initial_count - len(fact_df)
             if dropped_count > 0:
                 logger.warning(
                     f"Dropped {dropped_count} inventory records due to missing dimension keys")
+                logger.warning(
+                    f"Rejected records saved to rejected_data folder")
 
             if fact_df.empty:
                 logger.warning(
@@ -725,6 +778,13 @@ def load_fact_inventory(db, inventory_df, batch_size=1000):
                     logger.error(
                         f"Error loading inventory batch {i//actual_batch_size + 1}: {batch_error}")
 
+                    # Save failed batch to rejected data folder
+                    failed_batch = batch.copy()
+                    batch_error_reason = f"Database insertion failed: {str(batch_error)}"
+                    save_rejected_inventory_data(
+                        failed_batch, batch_error_reason)
+
+                    # Try individual record insertion as fallback
                     for idx, row in batch.iterrows():
                         try:
                             row_df = pd.DataFrame([row])
@@ -739,6 +799,7 @@ def load_fact_inventory(db, inventory_df, batch_size=1000):
                         except Exception as row_error:
                             logger.error(
                                 f"Failed to insert individual inventory record: {row['inventory_id']} - {row_error}")
+                            # Individual failures are already captured in the batch failure above
                             continue
 
             print(f"Loaded {total_loaded} new inventory records")
@@ -779,8 +840,8 @@ def load_data_to_warehouse(transformed_data):
             ('customers', 'dimcustomer', 'customer_id'),
             ('products', 'dimproduct', 'product_id'),
             ('stores', 'dimstore', 'store_id'),
-            ('suppliers', 'dimsupplier', 'supplier_id'),
-            ('dates', 'dimdate', 'date_key')
+            ('suppliers', 'dimsupplier', 'supplier_id')
+            # Note: Date dimension is now loaded separately using create_date_dimension.py
         ]
 
         for data_key, table_name, key_column in dimension_tables:
@@ -797,14 +858,15 @@ def load_data_to_warehouse(transformed_data):
             existing_promos = db.run_query(
                 "SELECT COUNT(*) as count FROM dimpromotion")
             if existing_promos is None or existing_promos['count'].iloc[0] == 0:
-                default_promotion_data = pd.DataFrame([{
-                    'promotion_name': 'No Promotion',
-                    'type': 'None',
-                    'discount': 0.00
-                }])
-                if not load_dimension_table(db, default_promotion_data, 'dimpromotion', 'promotion_name'):
+                # Create default promotion directly using insert
+                default_promotion_sql = """
+                    INSERT INTO dimpromotion (promotion_name, type, discount) 
+                    VALUES ('No Promotion', 'None', 0.00)
+                """
+                if not db.execute_query(default_promotion_sql):
                     logger.error("Failed to create default promotion")
                     return False
+                logger.info("Created default promotion record")
 
         logger.info("Loading fact tables...")
 

@@ -51,7 +51,7 @@ def drop_and_recreate_tables():
         "DROP TABLE IF EXISTS DimProduct",
         "DROP TABLE IF EXISTS DimStore",
         "DROP TABLE IF EXISTS DimSupplier",
-        "DROP TABLE IF EXISTS DimDate",
+        # DimDate is preserved
         "DROP TABLE IF EXISTS DimPromotion"
     ]
 
@@ -114,17 +114,7 @@ def drop_and_recreate_tables():
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
                 )
             ''',
-            'DimDate': '''
-                CREATE TABLE DimDate (
-                    date_key INT PRIMARY KEY,
-                    full_date DATE,
-                    year INT,
-                    quarter INT,
-                    month INT,
-                    week INT,
-                    day INT
-                )
-            ''',
+
             'DimPromotion': '''
                 CREATE TABLE DimPromotion (
                     promotion_key INT AUTO_INCREMENT PRIMARY KEY,
@@ -201,6 +191,8 @@ def main():
 
     logger.info("=" * 50)
     logger.info("Complete ETL reset finished!")
+    logger.info("=" * 50)
+    logger.info("=" * 50)
 
 
 if __name__ == "__main__":
