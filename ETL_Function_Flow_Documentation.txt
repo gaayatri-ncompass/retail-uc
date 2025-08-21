@@ -1,0 +1,785 @@
+===============================================================================
+                     ETL PIPELINE FUNCTION FLOW DOCUMENTATION
+===============================================================================
+Date: August 21, 2025
+Project: Retail Sales ETL Use Case
+Author: System Analysis
+===============================================================================
+
+OVERVIEW:
+This document provides a comprehensive, detailed flow of all functions in the
+ETL pipeline, including their purpose, inputs, outputs, and interactions.
+
+===============================================================================
+                              ENTRY POINT
+===============================================================================
+
+📍 FUNCTION: main() 
+    FILE: main.py
+    PURPOSE: Main orchestrator of the entire ETL process
+    
+    FLOW:
+    1. Initialize logging with "ETL process started..."
+    2. Execute try-catch block for error handling
+    3. CALL: run_extraction() → Returns extracted_data (boolean)
+    4. CALL: run_transformation() → Returns transformed_data (dictionary)
+    5. CALL: run_loading(transformed_data) → Returns loading_result (boolean)
+    6. Log completion messages
+    
+    ERROR HANDLING:
+    - ExtractionError: Logs extraction phase failure
+    - TransformationError: Logs transformation phase failure  
+    - LoadingError: Logs loading phase failure
+    - ETLError: Logs general ETL errors
+    - Exception: Logs unexpected errors
+    
+    RETURNS: None (main execution function)
+
+===============================================================================
+                            PHASE 1: EXTRACTION
+===============================================================================
+
+📍 FUNCTION: run_extraction()
+    FILE: src/extract/extractor.py
+    PURPOSE: Coordinates the complete extraction process for all data sources
+    
+    INITIALIZATION:
+    - Define extraction_config list with 6 tuples:
+      ('customers.csv', 'customers', 'customer_id')
+      ('products.csv', 'products', 'product_id')
+      ('stores.csv', 'stores', 'store_id') 
+      ('sales.csv', 'sales', 'sale_id')
+      ('inventory.csv', 'inventory', 'product_id')
+      ('suppliers.csv', 'suppliers', 'supplier_id')
+    
+    FLOW:
+    1. Create DataLoader() instance
+    2. FOR EACH (file_name, table_name, pk_column) in extraction_config:
+       a. Log: "Processing {file_name} -> {table_name}"
+       b. CALL: extract_csv_data(file_name, table_name) → Generator
+       c. CALL: data_loader.load_chunks_to_staging(data_chunks, file_name, table_name, pk_column)
+       d. Log: "Successfully processed {file_name}"
+    3. Log: "Extraction process completed successfully"
+    
+    ERROR HANDLING:
+    - Catches all exceptions and raises ExtractionError
+    
+    RETURNS: True (boolean) if successful
+
+📍 FUNCTION: extract_csv_data(file_name, table_name, chunk_size=1000)
+    FILE: src/extract/extractor.py
+    PURPOSE: Extract CSV data in chunks with validation and deduplication
+    
+    INPUTS:
+    - file_name: CSV filename in 'data/' directory
+    - table_name: Target table name for validation
+    - chunk_size: Number of rows per chunk (default 1000)
+    
+    FLOW:
+    1. Log: "Extracting data from {file_name}"
+    2. Initialize chunk counter
+    3. FOR EACH chunk in pd.read_csv(f'data/{file_name}', dtype=str, chunksize=chunk_size):
+       a. IF first chunk (chunk_num == 1):
+          - Get expected_cols from EXPECTED_COLUMNS[table_name]
+          - Check for missing columns
+          - IF missing columns found: raise ExtractionError
+       b. Select only expected columns from chunk
+       c. Remove duplicates: df_chunk.drop_duplicates(inplace=True)
+       d. YIELD (chunk_num, df_chunk)
+    
+    ERROR HANDLING:
+    - FileNotFoundError: Log and raise ExtractionError
+    - pd.errors.EmptyDataError: Log and raise ExtractionError
+    - General Exception: Log and raise ExtractionError
+    
+    RETURNS: Generator yielding (chunk_number, dataframe_chunk) tuples
+
+📍 FUNCTION: DataLoader.load_chunks_to_staging(data_chunks, file_name, table_name, pk_column)
+    FILE: src/load/data_loader.py
+    PURPOSE: Load extracted chunks to staging tables with validation and incremental processing
+    
+    INPUTS:
+    - data_chunks: Generator from extract_csv_data()
+    - file_name: Original CSV filename
+    - table_name: Target staging table name
+    - pk_column: Primary key column for incremental loading
+    
+    INITIALIZATION:
+    - total_processed = 0
+    - chunks_validated = 0  
+    - validation_passed = 0
+    
+    FLOW:
+    1. Log: "Loading {file_name} to staging table {table_name}"
+    2. Get last processed ID from etl_process_log:
+       - Query: "SELECT last_processed_id FROM etl_process_log WHERE table_name = :table_name"
+       - Set last_processed_id = result or None
+    
+    3. FOR EACH (chunk_num, df_chunk) in data_chunks:
+       a. Filter based on incremental loading:
+          - IF last_processed_id exists:
+            df_to_insert = df_chunk[df_chunk[pk_column] > last_processed_id]
+          - ELSE: df_to_insert = df_chunk
+       
+       b. IF df_to_insert is empty: continue to next chunk
+       
+       c. Validate chunk data:
+          - chunks_validated += 1
+          - CALL: validate_dataframe(df_to_insert, table_name)
+          - IF validation passes: validation_passed += 1
+          - ELSE: Log warning about validation issues
+       
+       d. Load to staging table:
+          - table_full_name = f'stg_{table_name}'
+          - df_to_insert.to_sql(name=table_full_name, con=self.db.engine, if_exists='append', index=False)
+          - total_processed += len(df_to_insert)
+    
+    4. Log validation summary: "{validation_passed}/{chunks_validated} chunks passed validation"
+    5. Log total records processed: "Total new records processed: {total_processed}"
+    
+    6. Update process log:
+       - Get max ID: "SELECT MAX({pk_column}) as max_id FROM stg_{table_name}"
+       - Update log: INSERT/UPDATE etl_process_log with new max_id
+    
+    ERROR HANDLING:
+    - Catches all exceptions and raises DatabaseError
+    
+    RETURNS: True (boolean) if successful
+
+📍 FUNCTION: validate_dataframe(df, table_name)
+    FILE: src/utils/validator.py
+    PURPOSE: Perform column-wise validation using predefined schemas
+    
+    INPUTS:
+    - df: Pandas DataFrame to validate
+    - table_name: Table name to get appropriate schema
+    
+    FLOW:
+    1. Check if table_name exists in schema_map
+    2. IF no schema: Log info and return True
+    3. Get schema = schema_map[table_name]
+    4. Initialize validation_issues = []
+    
+    5. FOR EACH (column_name, column_rules) in schema.items():
+       a. Check if column exists in DataFrame
+       b. IF required but missing: Add to validation_issues
+       c. IF column exists:
+          - Check for null values in required fields
+          - Validate data type (string validation)
+          - Check regex patterns using re.match()
+          - Add any issues to validation_issues list
+    
+    6. Log validation results:
+       - IF validation_issues exist: Log warnings for each issue, return False
+       - ELSE: Log success message, return True
+    
+    RETURNS: Boolean (True if validation passes, False if issues found)
+
+===============================================================================
+                          PHASE 2: TRANSFORMATION
+===============================================================================
+
+📍 FUNCTION: run_transformation()
+    FILE: src/transform/transformer.py
+    PURPOSE: Entry point for transformation phase
+    
+    FLOW:
+    1. CALL: transform_data()
+    
+    RETURNS: Dictionary containing transformed data
+
+📍 FUNCTION: transform_data()
+    FILE: src/transform/transformer.py
+    PURPOSE: Core transformation logic with incremental processing
+    
+    INITIALIZATION:
+    - staging_db = get_staging_db_connector()
+    - warehouse_db = get_warehouse_db_connector()
+    - transformed_data = {}
+    
+    FLOW:
+    1. Log: "Starting incremental data transformation using metadata watermarks..."
+    2. Connect to both databases:
+       - staging_db.connect()
+       - warehouse_db.connect()
+    
+    3. CALL: get_staging_tables_schema(staging_db) → Returns tables_config
+    4. Log: "Found {len(tables_config)} staging tables: {list(tables_config.keys())}"
+    
+    5. FOR EACH (table_name, schema_config) in tables_config.items():
+       a. Log: "Processing {table_name} data..."
+       b. CALL: extract_incremental_data(staging_db, table_name, schema_config) → raw_df
+       c. CALL: clean_data_by_schema(raw_df, table_name, schema_config) → cleaned_df
+       d. Store: transformed_data[table_name] = cleaned_df
+       e. Log: "Processed {len(cleaned_df)} records for {table_name}"
+    
+    6. Create dimensions:
+       - CALL: create_promotion_dimension() → promotions_df
+       - Store: transformed_data['promotions'] = promotions_df
+       - Log: "Promotion dimension created successfully"
+    
+    7. Update watermarks for all tables:
+       - Log: "Updating ETL metadata watermarks..."
+       - FOR EACH (table_name, schema_config) in tables_config.items():
+         IF transformed_data[table_name] is not empty:
+           CALL: update_watermark(staging_db, table_name, schema_config, transformed_data[table_name])
+       - Log: "ETL metadata watermarks updated successfully"
+    
+    8. Log: "Data transformation completed successfully!"
+    
+    ERROR HANDLING:
+    - TransformationError and DatabaseError: Re-raise
+    - General Exception: Log critical error and raise TransformationError
+    
+    CLEANUP:
+    - staging_db.disconnect()
+    - warehouse_db.disconnect()
+    
+    RETURNS: Dictionary with transformed data for each table
+
+📍 FUNCTION: get_staging_tables_schema(staging_db)
+    FILE: src/transform/transformer.py
+    PURPOSE: Discover staging table schemas and identify watermark columns
+    
+    FLOW:
+    1. Execute tables_query to get column information:
+       Query: "SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, IS_NULLABLE 
+               FROM INFORMATION_SCHEMA.COLUMNS 
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME LIKE 'stg_%'"
+    
+    2. Execute primary_keys_query to get primary key information:
+       Query: "SELECT TABLE_NAME, COLUMN_NAME 
+               FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+               WHERE TABLE_SCHEMA = DATABASE() AND CONSTRAINT_NAME = 'PRIMARY' AND TABLE_NAME LIKE 'stg_%'"
+    
+    3. Build primary_keys_map from query results
+    
+    4. FOR EACH row in schema_info:
+       a. Extract table_name, column_name, data_type
+       b. Create business_table = table_name.replace('stg_', '')
+       c. Initialize tables_config[business_table] if not exists:
+          - staging_table: table_name
+          - columns: {}
+          - key_column: None
+          - watermark_column: None
+       d. Store column metadata in tables_config[business_table]['columns'][column_name]
+       e. IF column is primary key: Set as key_column and watermark_column
+       f. IF column is timestamp type: Set as watermark_column
+    
+    5. Fallback watermark detection:
+       FOR EACH business_table without watermark_column:
+         Look for first column ending with '_id' and set as watermark_column
+    
+    RETURNS: Dictionary with table configuration metadata
+
+📍 FUNCTION: extract_incremental_data(staging_db, table_name, schema_config)
+    FILE: src/transform/transformer.py
+    PURPOSE: Extract only new/updated records using watermark-based incremental logic
+    
+    INPUTS:
+    - staging_db: Database connector to staging database
+    - table_name: Business table name
+    - schema_config: Table configuration with watermark information
+    
+    FLOW:
+    1. Get staging_table and watermark_column from schema_config
+    2. CALL: get_watermark(staging_db, table_name, schema_config) → last_value
+    3. Build query: "SELECT * FROM {staging_table} WHERE {watermark_column} > :watermark ORDER BY {watermark_column}"
+    4. Execute query with watermark parameter
+    
+    SECURITY ISSUE: Uses f-string interpolation for table/column names (SQL injection risk)
+    
+    RETURNS: DataFrame with incremental data or empty DataFrame
+
+📍 FUNCTION: get_watermark(staging_db, table_name, schema_config)
+    FILE: src/transform/transformer.py
+    PURPOSE: Retrieve the last processed watermark value for incremental loading
+    
+    FLOW:
+    1. Get staging_table and watermark_column from schema_config
+    2. Query etl_process_log: "SELECT last_processed_id FROM etl_process_log WHERE table_name = '{staging_table}'"
+    
+    SECURITY ISSUE: Uses f-string interpolation (SQL injection risk)
+    
+    3. IF watermark found: Return watermark value
+    4. ELSE: Return default value:
+       - IF timestamp column: Return '1900-01-01 00:00:00'
+       - ELSE: Return empty string ''
+    
+    RETURNS: Watermark value (string or datetime)
+
+📍 FUNCTION: clean_data_by_schema(df, table_name, schema_config)
+    FILE: src/transform/transformer.py
+    PURPOSE: Clean and transform data based on schema information
+    
+    INPUTS:
+    - df: Raw DataFrame from staging
+    - table_name: Business table name for specific transformations
+    - schema_config: Schema metadata for data type handling
+    
+    FLOW:
+    1. IF DataFrame is empty: Return as-is
+    2. Get columns_info and key_column from schema_config
+    3. Remove duplicates based on key_column if exists
+    
+    4. FOR EACH (column, col_info) in columns_info.items():
+       IF column not in DataFrame: continue
+       
+       a. Date/Datetime columns:
+          - Convert using pd.to_datetime(errors='coerce')
+          - Handle object dtype conversion
+          - IF table_name='sales' AND column='sale_date': 
+            CALL: get_date_key_from_date() to create sale_date_key
+          - IF not nullable: Drop rows with null dates
+       
+       b. String columns (varchar, char, text):
+          - Convert to string and strip whitespace
+          - IF email column: Convert to lowercase
+          - IF phone column: Remove non-digit characters (keep +)
+       
+       c. Numeric columns (int, bigint, decimal, etc.):
+          - Convert using pd.to_numeric(errors='coerce')
+          - IF not nullable AND not key_column: Drop rows with null values
+    
+    5. Special handling for sales table:
+       - Add payment_type = 'Credit Card' if missing
+       - Add channel = 'In-Store' if missing
+    
+    DATA INTEGRITY ISSUE: Uses df.loc[:, column] which can cause SettingWithCopyWarning
+    
+    RETURNS: Cleaned and transformed DataFrame
+
+📍 FUNCTION: get_date_key_from_date(date_value)
+    FILE: src/transform/transformer.py
+    PURPOSE: Convert date values to integer date keys (YYYYMMDD format)
+    
+    INPUTS:
+    - date_value: Date value (can be string, datetime, or NaT)
+    
+    FLOW:
+    1. IF pd.isna(date_value): Return None
+    2. IF isinstance(date_value, str): Convert using pd.to_datetime(errors='coerce')
+    3. IF still NaT after conversion: Return None
+    4. Format as integer: int(date_value.strftime('%Y%m%d'))
+    
+    RETURNS: Integer date key (YYYYMMDD) or None
+
+📍 FUNCTION: create_promotion_dimension()
+    FILE: src/transform/transformer.py
+    PURPOSE: Create promotion dimension data (currently placeholder)
+    
+    FLOW:
+    1. Return empty DataFrame
+    
+    NOTE: This is a placeholder function for future promotion logic
+    
+    RETURNS: Empty pandas DataFrame
+
+📍 FUNCTION: update_watermark(staging_db, table_name, schema_config, df)
+    FILE: src/transform/transformer.py
+    PURPOSE: Update the watermark tracking table with latest processed values
+    
+    INPUTS:
+    - staging_db: Database connector
+    - table_name: Business table name
+    - schema_config: Table configuration
+    - df: Processed DataFrame
+    
+    FLOW:
+    1. IF DataFrame is empty: Return immediately
+    2. Get staging_table and watermark_column from schema_config
+    3. Calculate latest_value = df[watermark_column].max()
+    
+    4. IF timestamp watermark:
+       - Convert to datetime if string
+       - Format as 'YYYY-MM-DD HH:MM:SS'
+    
+    5. Execute upsert query:
+       "INSERT INTO etl_process_log (table_name, last_processed_id, last_updated) 
+        VALUES (:table_name, :latest_value, NOW()) 
+        ON DUPLICATE KEY UPDATE last_processed_id = :latest_value, last_updated = NOW()"
+    
+    6. IF query fails: Raise DatabaseError
+    
+    RETURNS: None (void function)
+
+===============================================================================
+                             PHASE 3: LOADING
+===============================================================================
+
+📍 FUNCTION: run_loading(transformed_data)
+    FILE: src/load/loader.py
+    PURPOSE: Entry point for loading phase
+    
+    FLOW:
+    1. Log: "Starting ETL loading process..."
+    2. CALL: load_data_to_warehouse(transformed_data) → result
+    3. IF result: Log success
+    4. ELSE: Raise LoadingError
+    
+    ERROR HANDLING:
+    - LoadingError: Re-raise
+    - General Exception: Raise LoadingError
+    
+    RETURNS: Boolean result
+
+📍 FUNCTION: load_data_to_warehouse(transformed_data)
+    FILE: src/load/loader.py
+    PURPOSE: Orchestrate complete warehouse loading process
+    
+    FLOW:
+    1. Validate transformed_data is not empty
+    2. Get warehouse database connector and connect
+    3. CALL: create_warehouse_tables(db) → Boolean
+    4. CALL: load_all_dimensions(db, transformed_data) → Boolean
+    5. IF 'sales' in transformed_data: CALL: load_fact_sales(db, transformed_data['sales']) → Boolean
+    6. IF 'inventory' in transformed_data: CALL: load_fact_inventory(db, transformed_data['inventory']) → Boolean
+    7. Log: "✅ Data warehouse loading completed successfully!"
+    
+    ERROR HANDLING:
+    - All exceptions logged with traceback
+    
+    CLEANUP:
+    - db.disconnect()
+    
+    RETURNS: Boolean (True if successful, False if any step fails)
+
+📍 FUNCTION: create_warehouse_tables(db)
+    FILE: src/load/table_creator.py
+    PURPOSE: Create all required warehouse tables if they don't exist
+    
+    FLOW:
+    1. Define warehouse_table_names list:
+       ['dimcustomer', 'dimproduct', 'dimstore', 'dimsupplier', 'dimdate', 'dimpromotion', 'factsales', 'factinventorysnapshot']
+    
+    2. CALL: db.check_multiple_tables_exist(warehouse_table_names) → existing_tables
+    
+    3. Define warehouse_tables dictionary with CREATE TABLE statements:
+       - Dimension tables with auto-increment surrogate keys
+       - Fact tables with foreign key constraints
+    
+    4. FOR EACH (table_name, query) in warehouse_tables.items():
+       IF table exists: Skip and log
+       ELSE: Execute CREATE TABLE query
+    
+    5. Log summary: "Created: {tables_created}, Skipped: {tables_skipped}"
+    
+    ERROR HANDLING:
+    - IF any table creation fails: Return False
+    - Log all errors
+    
+    RETURNS: Boolean (True if all tables exist/created, False if any failure)
+
+📍 FUNCTION: load_all_dimensions(db, transformed_data)
+    FILE: src/load/dimension_loader.py
+    PURPOSE: Load all dimension tables in correct order
+    
+    FLOW:
+    1. Define dimension_tables list:
+       [('customers', 'dimcustomer', 'customer_id'),
+        ('products', 'dimproduct', 'product_id'),
+        ('stores', 'dimstore', 'store_id'),
+        ('suppliers', 'dimsupplier', 'supplier_id')]
+    
+    2. FOR EACH (data_key, table_name, key_column) in dimension_tables:
+       IF data_key in transformed_data:
+         CALL: load_dimension_table(db, transformed_data[data_key], table_name, key_column)
+         IF fails: Return False
+    
+    3. CALL: _handle_promotions(db, transformed_data) → Boolean
+    
+    RETURNS: Boolean (True if all dimensions loaded successfully)
+
+📍 FUNCTION: load_dimension_table(db, df, table_name, key_column, batch_size=1000)
+    FILE: src/load/dimension_loader.py
+    PURPOSE: Load individual dimension table with incremental logic
+    
+    INPUTS:
+    - db: Database connector
+    - df: DataFrame with dimension data
+    - table_name: Target dimension table name
+    - key_column: Business key column for incremental filtering
+    - batch_size: Batch size for loading (default 1000)
+    
+    FLOW:
+    1. Validate inputs (df not None/empty, key_column exists)
+    2. Log: "Loading {len(df)} records into {table_name}..."
+    3. CALL: _apply_incremental_filter(db, df, table_name, key_column) → filtered_df
+    4. IF filtered_df is empty: Log "No new records" and return True
+    5. CALL: _load_in_batches(db, filtered_df, table_name, batch_size) → total_loaded
+    6. Log: "Successfully loaded {total_loaded} new records into {table_name}"
+    
+    ERROR HANDLING:
+    - All exceptions logged with traceback
+    
+    RETURNS: Boolean (True if successful, False if any error)
+
+📍 FUNCTION: _apply_incremental_filter(db, df, table_name, key_column)
+    FILE: src/load/dimension_loader.py
+    PURPOSE: Filter DataFrame to only include new records not yet in warehouse
+    
+    FLOW:
+    1. Validate table_name and key_column against allowed values
+    2. Build query to get latest value:
+       - IF date_key: "SELECT MAX({key_column}) as latest_value FROM {table_name}"
+       - ELSE: "SELECT {key_column} as latest_value FROM {table_name} ORDER BY {key_column} DESC LIMIT 1"
+    
+    3. Execute query and get latest_value
+    4. IF latest_value exists:
+       - Filter df to only records > latest_value
+       - Log: "Filtered from {len(df)} to {len(filtered_df)} records"
+    5. ELSE: Log "No existing data, loading all records"
+    
+    ERROR HANDLING:
+    - IF any error: Return original df with warning
+    
+    RETURNS: Filtered DataFrame
+
+📍 FUNCTION: _load_in_batches(db, df, table_name, batch_size)
+    FILE: src/load/dimension_loader.py
+    PURPOSE: Load DataFrame to database in batches
+    
+    FLOW:
+    1. Initialize total_loaded = 0
+    2. FOR i in range(0, len(df), batch_size):
+       a. Create batch = df.iloc[i:i+batch_size].copy()
+       b. Fill NaN values in object columns with empty strings
+       c. Execute: batch.to_sql(name=table_name, con=db.engine, if_exists='append', index=False)
+       d. total_loaded += len(batch)
+       e. IF error: Log error and save rejected data, continue
+    
+    ERROR HANDLING:
+    - Batch-level error handling with rejected data saving
+    
+    RETURNS: Integer (total number of records loaded)
+
+📍 FUNCTION: _handle_promotions(db, transformed_data)
+    FILE: src/load/dimension_loader.py
+    PURPOSE: Handle promotion dimension loading or create default
+    
+    FLOW:
+    1. IF 'promotions' in transformed_data AND not empty:
+       CALL: load_dimension_table() for promotions
+    2. ELSE:
+       a. Check if default promotion exists
+       b. IF no promotions exist: Create default promotion:
+          "INSERT INTO dimpromotion (promotion_name, type, discount) VALUES ('No Promotion', 'None', 0.00)"
+       c. Log: "Created default promotion record"
+    
+    RETURNS: Boolean (True if successful)
+
+📍 FUNCTION: load_fact_sales(db, sales_df, batch_size=1000)
+    FILE: src/load/fact_sales_loader.py
+    PURPOSE: Load sales fact table with dimension key lookups
+    
+    INPUTS:
+    - db: Database connector
+    - sales_df: Sales data DataFrame
+    - batch_size: Batch size for loading
+    
+    FLOW:
+    1. Validate inputs and required columns: ['customer_id', 'product_id', 'store_id', 'sale_date', 'sale_id']
+    2. Log: "Preparing to load {len(sales_df)} sales records..."
+    
+    3. Retrieve dimension key mappings:
+       - customer_keys: "SELECT customer_key, customer_id FROM dimcustomer"
+       - product_keys: "SELECT product_key, product_id FROM dimproduct"
+       - store_keys: "SELECT store_key, store_id FROM dimstore"
+       - date_keys: "SELECT date_key, full_date FROM dimdate"
+    
+    4. Handle promotion key:
+       - Get existing promotion: "SELECT promotion_key FROM dimpromotion LIMIT 1"
+       - IF no promotion exists: Create default promotion
+       - Set default_promotion_key
+    
+    5. Apply incremental filtering:
+       - Get latest sale_id: "SELECT sale_id FROM factsales ORDER BY sale_id DESC LIMIT 1"
+       - Filter sales_df to only records > latest_sale_id
+    
+    6. Process dates:
+       - Convert sale_date to datetime and date format
+       - Convert date_keys full_date to date format
+    
+    7. Merge with dimension tables:
+       - Merge sales_df with customer_keys on customer_id
+       - Merge with product_keys on product_id
+       - Merge with store_keys on store_id
+       - Merge with date_keys on sale_date
+    
+    8. Handle missing dimension keys:
+       - Count and log missing keys for each dimension
+       - Save rejected records with missing keys
+       - Drop records with any missing dimension keys
+    
+    9. Assign promotion key and validate foreign keys
+    10. Prepare final fact DataFrame with required columns
+    11. Load in batches using pandas.to_sql()
+    
+    ERROR HANDLING:
+    - Comprehensive error handling at each step
+    - Rejected data saved to CSV files
+    - Batch-level error recovery
+    
+    RETURNS: Boolean (True if successful)
+
+📍 FUNCTION: load_fact_inventory(db, inventory_df, batch_size=1000)
+    FILE: src/load/fact_inventory_loader.py
+    PURPOSE: Load inventory fact table with dimension key lookups
+    
+    FLOW (Similar to sales but for inventory):
+    1. Validate required columns: ['product_id', 'store_id', 'supplier_id', 'last_updated']
+    2. Retrieve dimension keys: product, store, date, supplier
+    3. Generate composite inventory_id from product_id + store_id + timestamp
+    4. Apply incremental filtering based on inventory_id
+    5. Process dates and merge with dimension tables
+    6. Handle missing dimension keys and save rejected data
+    7. Load valid records in batches
+    
+    RETURNS: Boolean (True if successful)
+
+===============================================================================
+                           SUPPORTING UTILITIES
+===============================================================================
+
+📍 FUNCTION: save_rejected_*_data() Functions
+    FILE: src/utils/rejected_data_handler.py
+    PURPOSE: Save problematic records to CSV files for analysis
+    
+    FUNCTIONS:
+    - save_rejected_data(df, table_name, reason, additional_info=None)
+    - save_rejected_sales_data(rejected_df, reason, missing_keys_info=None)
+    - save_rejected_inventory_data(rejected_df, reason, missing_keys_info=None)
+    - save_rejected_dimension_data(rejected_df, table_name, reason)
+    
+    FLOW:
+    1. Create rejected_data folder if not exists
+    2. Generate timestamp-based filename
+    3. Add metadata columns (rejection_reason, rejection_timestamp, additional_info)
+    4. Save to CSV file
+    5. Log warning with file path and reason
+    
+    RETURNS: File path or None if error
+
+📍 DATABASE CONNECTION FUNCTIONS
+    FILE: src/utils/config.py & src/utils/db_connector.py
+    
+    FUNCTIONS:
+    - get_staging_db_connector() → Returns DBConnector for staging
+    - get_warehouse_db_connector() → Returns DBConnector for warehouse
+    - DBConnector.connect() → Establishes database connection
+    - DBConnector.disconnect() → Closes database connection
+    - DBConnector.run_query(sql) → Executes SELECT query, returns DataFrame
+    - DBConnector.execute_query(sql) → Executes DML query, returns Boolean
+    - DBConnector.run_query_with_params(sql, params) → Parameterized SELECT
+    - DBConnector.execute_query_with_params(sql, params) → Parameterized DML
+    - DBConnector.table_exists(table_name) → Checks if table exists
+    - DBConnector.check_multiple_tables_exist(table_names) → Batch table check
+
+===============================================================================
+                              EXECUTION SEQUENCE
+===============================================================================
+
+COMPLETE CALL HIERARCHY:
+
+main()
+├── run_extraction()
+│   ├── extract_csv_data() ──┐
+│   └── DataLoader.load_chunks_to_staging() ──┤
+│       └── validate_dataframe() ─────────────┘
+├── run_transformation() 
+│   └── transform_data()
+│       ├── get_staging_tables_schema()
+│       ├── extract_incremental_data()
+│       │   └── get_watermark()
+│       ├── clean_data_by_schema()
+│       │   └── get_date_key_from_date()
+│       ├── create_promotion_dimension()
+│       └── update_watermark()
+└── run_loading()
+    └── load_data_to_warehouse()
+        ├── create_warehouse_tables()
+        ├── load_all_dimensions()
+        │   ├── load_dimension_table()
+        │   │   ├── _apply_incremental_filter()
+        │   │   └── _load_in_batches()
+        │   └── _handle_promotions()
+        ├── load_fact_sales()
+        └── load_fact_inventory()
+
+===============================================================================
+                                DATA FLOW
+===============================================================================
+
+1. CSV FILES → extract_csv_data() → CHUNKS
+2. CHUNKS → validate_dataframe() → VALIDATED CHUNKS  
+3. VALIDATED CHUNKS → load_chunks_to_staging() → STAGING TABLES (stg_*)
+4. STAGING TABLES → extract_incremental_data() → RAW DATAFRAMES
+5. RAW DATAFRAMES → clean_data_by_schema() → CLEANED DATAFRAMES
+6. CLEANED DATAFRAMES → create_warehouse_tables() → WAREHOUSE SCHEMA
+7. CLEANED DATAFRAMES → load_all_dimensions() → DIMENSION TABLES (dim*)
+8. CLEANED DATAFRAMES → load_fact_sales/inventory() → FACT TABLES (fact*)
+
+===============================================================================
+                              WATERMARK SYSTEM
+===============================================================================
+
+The ETL system uses a sophisticated watermark mechanism for incremental processing:
+
+1. EXTRACTION PHASE:
+   - Tracks last_processed_id per table in etl_process_log
+   - Only processes records > last_processed_id
+
+2. TRANSFORMATION PHASE:
+   - Uses same watermark system to read only new staging data
+   - Updates watermarks after successful transformation
+
+3. LOADING PHASE:
+   - Dimension tables: Uses business keys for incremental filtering
+   - Fact tables: Uses primary keys (sale_id, inventory_id) for filtering
+
+WATERMARK TABLE STRUCTURE:
+- table_name: Name of the staging table
+- last_processed_id: Last processed primary key value
+- last_updated: Timestamp of last update
+
+===============================================================================
+                               ERROR HANDLING
+===============================================================================
+
+ERROR PROPAGATION HIERARCHY:
+1. Function-level: Try-catch with specific error types
+2. Phase-level: ETL-specific exceptions (ExtractionError, TransformationError, LoadingError)
+3. System-level: DatabaseError for connection/query issues
+4. Top-level: Main function catches all and logs appropriately
+
+REJECTED DATA HANDLING:
+- Validation failures → rejected_data folder with CSV files
+- Missing dimension keys → Separate CSV files with error details
+- Database insertion failures → Batch-level error recovery
+
+LOGGING LEVELS:
+- INFO: Normal operation progress
+- WARNING: Data quality issues, non-fatal errors
+- ERROR: Recoverable errors, rejected data
+- CRITICAL: System failures, data corruption risks
+
+===============================================================================
+                              PERFORMANCE NOTES
+===============================================================================
+
+OPTIMIZATIONS IMPLEMENTED:
+1. Chunk-based processing for large files
+2. Generator pattern for memory efficiency
+3. Batch loading to database
+4. Incremental processing with watermarks
+5. Column-wise validation (100-200x faster than row-wise)
+
+POTENTIAL BOTTLENECKS:
+1. Single-threaded processing
+2. No connection pooling
+3. Large DataFrames held in memory during transformation
+4. Pandas SettingWithCopyWarning issues
+
+===============================================================================
+                                  END OF DOCUMENT
+===============================================================================

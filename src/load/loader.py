@@ -210,4 +210,4 @@ def validate_warehouse_integrity(db=None):
 
 
 if __name__ == "__main__":
-    logger.info("Loader module ready - use run_loading() to process data")
+    logger.info("Loader module ready")

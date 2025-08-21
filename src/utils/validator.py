@@ -85,23 +85,54 @@ def validate_dataframe(df, table_name):
         return True
 
     schema = schema_map[table_name]
-    error_count = 0
+    validation_issues = []
 
-    for index, row in df.iterrows():
-        try:
-            validate_data(row.to_dict(), schema)
-        except ExtractionError as e:
-            error_count += 1
-            if error_count <= 3:  # Only log first 3 errors
-                logger.warning(
-                    f"Row {index + 1} validation failed: {e.message}")
+    # Column-wise validation
+    for column_name, column_rules in schema.items():
+        if column_name not in df.columns:
+            if column_rules.get('required', False):
+                validation_issues.append(
+                    f"Required column '{column_name}' is missing")
+            continue
 
-    if error_count > 0:
-        logger.warning(
-            f"Validation failed for {table_name}: {error_count} errors out of {len(df)} rows")
-        if error_count > 3:
-            logger.warning(f"... and {error_count - 3} more errors")
+        column_data = df[column_name]
+
+        # Check for required field nulls
+        if column_rules.get('required', False):
+            null_count = column_data.isnull().sum()
+            if null_count > 0:
+                validation_issues.append(
+                    f"Column '{column_name}': {null_count} null values found (required field)")
+
+        # Check data type (for string type)
+        if column_rules.get('type') == 'string':
+            non_string_count = 0
+            for value in column_data.dropna():
+                if not isinstance(value, str):
+                    non_string_count += 1
+            if non_string_count > 0:
+                validation_issues.append(
+                    f"Column '{column_name}': {non_string_count} non-string values found")
+
+        # Check regex patterns
+        if 'regex' in column_rules:
+            import re
+            pattern = column_rules['regex']
+            regex_fail_count = 0
+            for value in column_data.dropna():
+                if isinstance(value, str) and not re.match(pattern, value):
+                    regex_fail_count += 1
+            if regex_fail_count > 0:
+                validation_issues.append(
+                    f"Column '{column_name}': {regex_fail_count} values don't match expected pattern")
+
+    # Log validation summary
+    if validation_issues:
+        logger.warning(f"Column validation issues for {table_name}:")
+        for issue in validation_issues:
+            logger.warning(f"  - {issue}")
         return False
     else:
-
+        logger.info(
+            f"Column validation passed for {table_name}: {len(df)} rows validated")
         return True
