@@ -1,5 +1,5 @@
-from src.utils.config import get_warehouse_db_connector
-from logger import get_logger
+from configs.db_config import get_warehouse_db_connector
+from src.utils.logger import get_logger
 
 
 logger = get_logger("ANALYTICS")

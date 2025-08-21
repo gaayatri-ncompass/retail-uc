@@ -59,8 +59,32 @@ class SimpleLogger:
     def critical(self, message):
         self._log("CRITICAL", message)
 
-    def set_level(self, level):
+    def success(self, message):
+        """Log success messages with green checkmark"""
+        self._log("INFO", f"✅ {message}")
 
+    def process_start(self, process_name):
+        """Log process start with formatted banner"""
+        self._log("INFO", f"{'='*50}")
+        self._log("INFO", f"STARTING: {process_name.upper()}")
+        self._log("INFO", f"{'='*50}")
+
+    def process_end(self, process_name):
+        """Log process completion with formatted banner"""
+        self._log("INFO", f"✅ COMPLETED: {process_name.upper()}")
+        self._log("INFO", f"{'='*50}")
+
+    def loading_progress(self, current, total, entity):
+        """Log loading progress"""
+        percentage = (current / total) * 100 if total > 0 else 0
+        self._log(
+            "INFO", f"Loading {entity}: {current}/{total} ({percentage:.1f}%)")
+
+    def data_summary(self, entity, count, action="processed"):
+        """Log data processing summary"""
+        self._log("INFO", f"{entity.title()}: {count} records {action}")
+
+    def set_level(self, level):
         self.log_level = level.upper()
         self.current_level = self.levels.get(self.log_level, 1)
 

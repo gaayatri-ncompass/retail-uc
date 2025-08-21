@@ -1,7 +1,7 @@
 from cerberus import Validator
 from .exceptions import ExtractionError
 import logging
-from logger import get_logger
+from src.utils.logger import get_logger
 
 
 logger = get_logger("VALIDATOR")
@@ -79,9 +79,9 @@ def validate_data(data, schema):
 
 
 def validate_dataframe(df, table_name):
-
     if table_name not in schema_map:
-        logger.info(f"No schema defined for {table_name}, skipping validation")
+        logger.debug(
+            f"No schema defined for {table_name}, skipping validation")
         return True
 
     schema = schema_map[table_name]
@@ -133,6 +133,6 @@ def validate_dataframe(df, table_name):
             logger.warning(f"  - {issue}")
         return False
     else:
-        logger.info(
+        logger.debug(
             f"Column validation passed for {table_name}: {len(df)} rows validated")
         return True

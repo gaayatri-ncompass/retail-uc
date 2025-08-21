@@ -1,9 +1,0 @@
-product_id,product_name,category,price,rejection_reason,rejection_timestamp
-TEST_PROD_001,Valid Product,Test,10.99,"Database insertion failed: (pymysql.err.DataError) (1366, ""Incorrect decimal value: 'not-a-number' for column 'price' at row 2"")
-[SQL: INSERT INTO dimproduct (product_id, product_name, category, price) VALUES (%(product_id)s, %(product_name)s, %(category)s, %(price)s)]
-[parameters: [{'product_id': 'TEST_PROD_001', 'product_name': 'Valid Product', 'category': 'Test', 'price': '10.99'}, {'product_id': 'TEST_PROD_002', 'product_name': 'Bad Price Product', 'category': 'Test', 'price': 'not-a-number'}]]
-(Background on this error at: https://sqlalche.me/e/20/9h9h)",2025-08-20 09:50:18.094063
-TEST_PROD_002,Bad Price Product,Test,not-a-number,"Database insertion failed: (pymysql.err.DataError) (1366, ""Incorrect decimal value: 'not-a-number' for column 'price' at row 2"")
-[SQL: INSERT INTO dimproduct (product_id, product_name, category, price) VALUES (%(product_id)s, %(product_name)s, %(category)s, %(price)s)]
-[parameters: [{'product_id': 'TEST_PROD_001', 'product_name': 'Valid Product', 'category': 'Test', 'price': '10.99'}, {'product_id': 'TEST_PROD_002', 'product_name': 'Bad Price Product', 'category': 'Test', 'price': 'not-a-number'}]]
-(Background on this error at: https://sqlalche.me/e/20/9h9h)",2025-08-20 09:50:18.094063

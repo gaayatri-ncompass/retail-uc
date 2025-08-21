@@ -2,61 +2,41 @@ from src.extract.extractor import run_extraction
 from src.transform.transformer import run_transformation
 from src.load.loader import run_loading
 from src.utils.exceptions import ETLError, ExtractionError, TransformationError, LoadingError
-from logger import get_logger
+from src.utils.logger import get_logger
 
 logger = get_logger("MAIN")
 
 
 def main():
-
-    logger.info("ETL process started...")
+    logger.process_start("ETL Process")
 
     try:
-        logger.info("=" * 50)
-        logger.info("STEP 1: EXTRACTION")
-        logger.info("=" * 50)
-        extracted_data = run_extraction()
-        logger.info("Extraction phase completed successfully")
+        # Step 1: Extraction
+        logger.process_start("Extraction")
+        run_extraction()
+        logger.process_end("Extraction")
 
-        logger.info("=" * 50)
-        logger.info("STEP 2: TRANSFORMATION")
-        logger.info("=" * 50)
-        transformed_data = run_transformation()
-        logger.info("Transformation phase completed successfully")
+        # Step 2: Transformation
+        logger.process_start("Transformation")
+        transform_result = run_transformation()
+        logger.process_end("Transformation")
 
-        logger.info("=" * 50)
-        logger.info("STEP 3: LOADING")
-        logger.info("=" * 50)
-        if transformed_data:
-            run_loading(transformed_data)
-            logger.info("Loading phase completed successfully")
-        else:
+        # Step 3: Loading
+        logger.process_start("Loading")
+        if not transform_result:
             raise LoadingError("No transformed data to load", "LOAD001")
 
-        logger.info("=" * 50)
-        logger.info("ETL process finished successfully.")
-        logger.info("=" * 50)
+        run_loading(transform_result)
+        logger.process_end("Loading")
 
-    except ExtractionError as e:
-        logger.error(f"ETL process failed during extraction phase: {e}")
-        logger.error("ETL process failed during extraction phase.")
+        logger.success("ETL process completed successfully")
 
-    except TransformationError as e:
-        logger.error(f"ETL process failed during transformation phase: {e}")
-        logger.error("ETL process failed during transformation phase.")
-
-    except LoadingError as e:
-        logger.error(f"ETL process failed during loading phase: {e}")
-        logger.error("ETL process failed during loading phase.")
-
-    except ETLError as e:
-        logger.error(f"ETL process failed with a general error: {e}")
-        logger.error("ETL process failed with a general error.")
-
+    except (ExtractionError, TransformationError, LoadingError, ETLError) as e:
+        logger.error(f"ETL process failed: {e}")
+        raise
     except Exception as e:
-        logger.critical(
-            f"ETL process failed with an unexpected error: {str(e)}")
-        logger.critical("ETL process failed with an unexpected error.")
+        logger.critical(f"ETL process failed with unexpected error: {str(e)}")
+        raise ETLError(f"Unexpected error: {str(e)}", "ETL001")
 
 
 if __name__ == "__main__":
