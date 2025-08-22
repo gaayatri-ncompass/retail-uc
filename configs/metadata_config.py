@@ -18,3 +18,26 @@ def get_extraction_config():
         ('inventory.csv', 'inventory', 'product_id'),
         ('suppliers.csv', 'suppliers', 'supplier_id')
     ]
+
+
+def get_id_columns():
+    return {
+        'customers': 'customer_id',
+        'products': 'product_id',
+        'stores': 'store_id',
+        'suppliers': 'supplier_id',
+        'inventory': 'product_id',
+        'sales': 'sale_id'
+    }
+
+
+def get_table_mapping():
+    """Map staging table names to warehouse table names"""
+    return {
+        'customers': 'dimcustomer',
+        'products': 'dimproduct',
+        'stores': 'dimstore',
+        'suppliers': 'dimsupplier',
+        'sales': 'factsales',
+        'inventory': 'factinventorysnapshot'
+    }

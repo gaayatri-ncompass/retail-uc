@@ -1,0 +1,5 @@
+promotion_key,promotion_id,promotion_name,discount_percentage,start_date,end_date,rejection_reason,rejection_timestamp
+1,1,No Promotion,0.0,2025-08-22 09:47:17.800951,2026-08-22 09:47:17.800952,"Database insertion failed: (pymysql.err.OperationalError) (1054, ""Unknown column 'promotion_id' in 'field list'"")
+[SQL: INSERT INTO dimpromotion (promotion_key, promotion_id, promotion_name, discount_percentage, start_date, end_date) VALUES (%(promotion_key)s, %(promotion_id)s, %(promotion_name)s, %(discount_percentage)s, %(start_date)s, %(end_date)s)]
+[parameters: {'promotion_key': 1, 'promotion_id': 1, 'promotion_name': 'No Promotion', 'discount_percentage': 0.0, 'start_date': datetime.datetime(2025, 8, 22, 9, 47, 17, 800951), 'end_date': datetime.datetime(2026, 8, 22, 9, 47, 17, 800952)}]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)",2025-08-22 09:47:17.870145

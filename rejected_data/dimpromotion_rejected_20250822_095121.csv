@@ -1,0 +1,5 @@
+promotion_key,promotion_name,type,discount,created_at,rejection_reason,rejection_timestamp
+1,No Promotion,Default,0.0,2025-08-22 09:51:21.585943,"Database insertion failed: (pymysql.err.IntegrityError) (1062, ""Duplicate entry '1' for key 'dimpromotion.PRIMARY'"")
+[SQL: INSERT INTO dimpromotion (promotion_key, promotion_name, type, discount, created_at) VALUES (%(promotion_key)s, %(promotion_name)s, %(type)s, %(discount)s, %(created_at)s)]
+[parameters: {'promotion_key': 1, 'promotion_name': 'No Promotion', 'type': 'Default', 'discount': 0.0, 'created_at': datetime.datetime(2025, 8, 22, 9, 51, 21, 585943)}]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)",2025-08-22 09:51:21.675665

@@ -11,7 +11,7 @@ def reset_etl_metadata():
     staging_db.connect()
 
     try:
-        if staging_db.execute_query("TRUNCATE TABLE etl_process_log"):
+        if staging_db.query("TRUNCATE TABLE etl_process_log", fetch_data=False):
             logger.info("Cleared ETL process log (watermarks)")
         else:
             logger.error("Failed to clear ETL process log")
@@ -26,7 +26,7 @@ def reset_etl_metadata():
         ]
 
         for table in staging_tables:
-            if staging_db.execute_query(f"TRUNCATE TABLE {table}"):
+            if staging_db.query(f"TRUNCATE TABLE {table}", fetch_data=False):
                 logger.info(f"Cleared {table}")
             else:
                 logger.error(f"Failed to clear {table}")
@@ -57,15 +57,15 @@ def drop_and_recreate_tables():
 
     try:
 
-        db.execute_query("SET FOREIGN_KEY_CHECKS = 0")
+        db.query("SET FOREIGN_KEY_CHECKS = 0", fetch_data=False)
 
         for query in drop_queries:
-            if db.execute_query(query):
+            if db.query(query, fetch_data=False):
                 logger.debug(f"Dropped table: {query}")
             else:
                 logger.error(f"Failed to drop table: {query}")
 
-        db.execute_query("SET FOREIGN_KEY_CHECKS = 1")
+        db.query("SET FOREIGN_KEY_CHECKS = 1", fetch_data=False)
 
         create_tables_queries = {
             'DimCustomer': '''
@@ -164,7 +164,7 @@ def drop_and_recreate_tables():
         }
 
         for table_name, query in create_tables_queries.items():
-            if db.execute_query(query):
+            if db.query(query, fetch_data=False):
                 logger.info(f"Created table {table_name}")
             else:
                 logger.error(f"Failed to create table {table_name}")
@@ -191,7 +191,6 @@ def main():
 
     logger.info("=" * 50)
     logger.info("Complete ETL reset finished!")
-    logger.info("=" * 50)
     logger.info("=" * 50)
 
 

@@ -1,0 +1,19 @@
+customer_id,customer_name,email,phone,address,signup_date,rejection_reason,rejection_timestamp
+CUST11000,April Morar,coy0@gmail.com,(038)937-0127x74197,"653 Toni Ridges, Joliet, MT 61853",2019-11-12,Duplicate key constraint violation,2025-08-22 23:04:42.165320
+CUST11001,Deanna Fritsch,harmony_wisozk19@hotmail.com,(797)415-8759x11734,"58663 Ash Road, Santinoville, TN 00805",2020-07-06,Duplicate key constraint violation,2025-08-22 23:04:42.165320
+CUST11002,Mrs. Sandy Schumm,destin_zemlak@hotmail.com,5547771841,"51431 Belmont Road, Pansyview, UT 31947",2022-01-13,Duplicate key constraint violation,2025-08-22 23:04:42.165320
+CUST11003,Thelma Rempel,fausto.bailey@gmail.com,+1-923-074-6652,"937 E South Street, North Susiehaven, NJ 55225-2376",2025-09-23,Duplicate key constraint violation,2025-08-22 23:04:42.165320
+CUST11004,Lionel Kessler,brennon24@yahoo.com,0324075300,"6000 Emanuel Wells, South Johnny, ND 62631",2021-05-20,Duplicate key constraint violation,2025-08-22 23:04:42.165320
+CUST11005,Blake Howe,deion.parker79@gmail.com,+1-141-107-6730,"3024 Russel Mountains, Padbergchester, NE 85193",2024-08-27,Duplicate key constraint violation,2025-08-22 23:04:42.165320
+CUST11006,Mrs. Monica Nicolas,jerod_carroll35@yahoo.com,+1-160-210-6315,"1915 Bailey Land, Port Aureliobury, NE 38582",2022-11-16,Duplicate key constraint violation,2025-08-22 23:04:42.165320
+CUST11007,Darin Hyatt,stevie22@hotmail.com,+1-534-021-2534,"84635 Mill Close, West Lindsay, NV 52798",2019-07-21,Duplicate key constraint violation,2025-08-22 23:04:42.165320
+CUST11008,Billie Herzog DDS,wilma.windler75@hotmail.com,+1-842-711-4985,"87963 Dawn Cove, Perris, WI 68244",2022-07-21,Duplicate key constraint violation,2025-08-22 23:04:42.165320
+CUST11009,Edward Bartoletti,ariane_leannon-johnston83@hotmail.com,+1-008-028-7529,"897 Moor Lane, Mesa, IL 91825-6774",2019-03-04,Duplicate key constraint violation,2025-08-22 23:04:42.165320
+CUST11010,Jeremiah Rohan,antwon99@hotmail.com,(817)992-5891x72777,"41717 Raegan Falls, East Kristastad, TN 35640",2022-01-06,Duplicate key constraint violation,2025-08-22 23:04:42.165320
+CUST11011,Darin Schulist,charles.davis22@gmail.com,+1-844-018-5290,"752 Bernhard Station, Mrazside, MI 51823",2023-10-29,Duplicate key constraint violation,2025-08-22 23:04:42.165320
+CUST11012,Nick Larson,marc_larkin-dare@gmail.com,7714402550,"41650 King Spring, West Aldaside, WY 21061-2749",2022-12-06,Duplicate key constraint violation,2025-08-22 23:04:42.165320
+CUST11013,Cedric Rosenbaum IV,lysanne14@gmail.com,1681976903,"86298 Wilkinson Lake, South Lydiaport, WI 64284-0691",2019-06-05,Duplicate key constraint violation,2025-08-22 23:04:42.165320
+CUST11014,Wesley Connelly,llewellyn42@yahoo.com,(175)216-8596x53042,"60551 The Mount, Aufderharbury, KS 67666-1456",2025-03-29,Duplicate key constraint violation,2025-08-22 23:04:42.165320
+CUST11015,Roberta Renner,dashawn93@hotmail.com,(364)280-5745x56052,"3164 Marielle Orchard, New Braunfels, NM 43721-2273",2022-12-21,Duplicate key constraint violation,2025-08-22 23:04:42.165320
+None,Bad Customer 1,invalid-email-format,1234567890,123 Bad St,2024-01-01,Duplicate key constraint violation,2025-08-22 23:04:42.165320
+BAD_CUST_001,Bad Customer 2,another-bad-email,ABC-DEF-GHIJ,456 Bad Ave,,Duplicate key constraint violation,2025-08-22 23:04:42.165320

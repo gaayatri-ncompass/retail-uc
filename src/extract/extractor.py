@@ -8,8 +8,6 @@ logger = get_logger("EXTRACT")
 
 
 def extract_csv_data(file_name, table_name):
-    logger.info(f"Extracting data from {file_name}")
-
     try:
         dataframe = pd.read_csv(f'data/{file_name}', dtype=str)
 
@@ -28,8 +26,6 @@ def extract_csv_data(file_name, table_name):
             dataframe = dataframe[expected_columns]
 
         dataframe = dataframe.drop_duplicates()
-
-        logger.data_summary(table_name, len(dataframe), "extracted")
         return dataframe
 
     except Exception as e:
@@ -38,16 +34,13 @@ def extract_csv_data(file_name, table_name):
 
 def run_extraction():
     extraction_config = get_extraction_config()
-
     data_loader = DataLoader()
 
     for file_name, table_name, primary_key_column in extraction_config:
-        logger.info(f"Processing {file_name} -> {table_name}")
-
         extracted_data = extract_csv_data(file_name, table_name)
         data_loader.load_to_staging(
-            f'data/{file_name}', file_name, table_name, primary_key_column
+            extracted_data, file_name, table_name, primary_key_column
         )
 
-    logger.success("Extraction process completed successfully")
+    logger.success("Extraction completed")
     return True

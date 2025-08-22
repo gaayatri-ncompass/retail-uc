@@ -1,0 +1,2 @@
+sale_id,customer_id,product_id,store_id,sale_date,quantity,total_amount,sale_date_key,payment_type,channel,customer_key,product_key,store_key,promotion_key,date_key,rejection_reason,rejection_timestamp,additional_info
+BAD_SALE_001,NONEXISTENT_CUSTOMER,NONEXISTENT_PRODUCT,NONEXISTENT_STORE,2024-01-01,1,100.00,20240101.0,Credit Card,In-Store,,,,1,20240101.0,Missing dimension keys,2025-08-21 23:43:09.141914,"Missing keys: {'customer_key': np.int64(1), 'product_key': np.int64(1), 'store_key': np.int64(1)}"

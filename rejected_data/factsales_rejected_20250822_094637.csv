@@ -1,0 +1,4 @@
+sale_id,customer_id,product_id,store_id,sale_date,quantity,total_amount,sale_date_key,customer_key,product_key,store_key,promotion_key,date_key,rejection_reason,rejection_timestamp,additional_info
+SALENEW00008,CUST9429,PROD0909,STORE785,2025-08-07,3.0,798.06,20250807.0,9447.0,,1190,1,20250807.0,Missing dimension keys,2025-08-22 09:46:37.948782,"Missing keys: {'customer_key': np.int64(1), 'product_key': np.int64(2)}"
+SALENEW00009,CUST3460,PROD1693,STORE988,2025-07-29,5.0,867.35,20250729.0,3478.0,,1387,1,20250729.0,Missing dimension keys,2025-08-22 09:46:37.948782,"Missing keys: {'customer_key': np.int64(1), 'product_key': np.int64(2)}"
+SALENEW00010,CUST0301,PROD2340,STORE226,2025-08-14,10.0,3650.9,20250814.0,,992.0,631,1,20250814.0,Missing dimension keys,2025-08-22 09:46:37.948782,"Missing keys: {'customer_key': np.int64(1), 'product_key': np.int64(2)}"

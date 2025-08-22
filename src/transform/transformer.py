@@ -1,156 +1,157 @@
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
-from configs.db_config import get_staging_db_connector
-from src.utils.exceptions import TransformationError, DatabaseError
-from src.utils.schema_manager import extract_staging_tables_schema, get_metadata_value
+from datetime import datetime
+from src.utils.exceptions import TransformationError
 from src.utils.logger import get_logger
+from configs.db_config import get_warehouse_db_connector
+from configs.metadata_config import get_table_mapping
+from src.transform.fact_transformer import transform_sales_fact, transform_inventory_fact
 
 logger = get_logger("TRANSFORMER")
 
 
-def extract_incremental_data(staging_db, table_name, schema_config):
-    staging_table = schema_config['staging_table']
-    metadata_column = schema_config['metadata_column']
-    last_value = get_metadata_value(staging_db, table_name, schema_config)
+def get_schema_and_clean_data(df, table_name):
+    """Get schema and clean data based on warehouse schema"""
+    table_mapping = get_table_mapping()
+    warehouse_table = table_mapping.get(table_name, table_name)
+    warehouse_db = get_warehouse_db_connector()
+    warehouse_db.connect()
 
-    query = f"SELECT * FROM {staging_table} WHERE {metadata_column} > :metadata ORDER BY {metadata_column}"
-    df = staging_db.run_query_with_params(query, {'metadata': last_value})
-    return df if df is not None else pd.DataFrame()
+    try:
+        schema_query = """SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS 
+                         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name"""
+        schema_df = warehouse_db.query(
+            schema_query, {"table_name": warehouse_table})
+
+        if schema_df is not None and not schema_df.empty:
+            schema_types = dict(
+                zip(schema_df['COLUMN_NAME'], schema_df['DATA_TYPE']))
+
+            # Clean columns based on schema types
+            for column in df.columns:
+                if column in schema_types:
+                    data_type = schema_types[column]
+                    try:
+                        if data_type in ['varchar', 'text', 'char']:
+                            df[column] = df[column].astype(str).str.strip()
+                            if 'email' in column.lower():
+                                df[column] = df[column].str.lower()
+                        elif data_type in ['int', 'bigint', 'decimal', 'float', 'double']:
+                            df[column] = pd.to_numeric(
+                                df[column], errors='coerce')
+                        elif data_type in ['date', 'datetime', 'timestamp']:
+                            df[column] = pd.to_datetime(
+                                df[column], errors='coerce')
+                    except Exception as e:
+                        logger.warning(f"Failed to clean column {column}: {e}")
+        return df
+    except Exception as e:
+        logger.warning(f"Could not get schema for {warehouse_table}: {e}")
+        return df
+    finally:
+        warehouse_db.disconnect()
 
 
-def get_date_key_from_date(date_value):
-    if pd.isna(date_value):
-        return None
-
-    if isinstance(date_value, str):
-        date_value = pd.to_datetime(date_value, errors='coerce')
-
-    if pd.isna(date_value):
-        return None
-
-    return int(date_value.strftime('%Y%m%d'))
-
-
-def clean_data_by_schema(df, table_name, schema_config):
+def clean_and_deduplicate(df, table_name):
+    """Clean data and remove duplicates with date key handling"""
     if df.empty:
         return df
 
-    columns_info = schema_config['columns']
-    key_column = schema_config['key_column']
+    logger.info(f"Transforming {table_name} with {len(df)} records")
 
-    if key_column and key_column in df.columns:
-        df = df.drop_duplicates(subset=[key_column])
+    # Get schema and clean data
+    df = get_schema_and_clean_data(df, table_name)
 
-    for column, col_info in columns_info.items():
-        if column not in df.columns:
-            continue
-
-        data_type = col_info['data_type']
-
-        if data_type in ['date', 'datetime', 'timestamp'] or 'date' in column.lower():
-            df[column] = pd.to_datetime(df[column], errors='coerce')
-
-            if df[column].dtype == 'object':
-                df[column] = pd.to_datetime(df[column])
-
-            # For sales table, create a date_key column for easier joins with dimdate
-            if table_name == 'sales' and column == 'sale_date':
-                df['sale_date_key'] = df[column].apply(get_date_key_from_date)
-
-            if col_info['is_nullable'] == 'NO':
-                initial_count = len(df)
-                df = df.dropna(subset=[column])
-                dropped = initial_count - len(df)
-                if dropped > 0:
-                    logger.warning(
-                        f"Dropped {dropped} records with invalid {column} in {table_name}")
-
-        elif data_type in ['varchar', 'char', 'text', 'string']:
-            df.loc[:, column] = df[column].astype(str).str.strip()
-
-            if 'email' in column.lower():
-                df.loc[:, column] = df[column].str.lower()
-
-            if 'phone' in column.lower():
-                df.loc[:, column] = df[column].str.replace(
-                    r'[^\d+]', '', regex=True)
-
-        elif data_type in ['int', 'bigint', 'decimal', 'float', 'double', 'numeric']:
-            df.loc[:, column] = pd.to_numeric(df[column], errors='coerce')
-
-            if col_info['is_nullable'] == 'NO' and column != key_column:
-                initial_count = len(df)
-                df = df.dropna(subset=[column])
-                dropped = initial_count - len(df)
-                if dropped > 0:
-                    logger.warning(
-                        f"Dropped {dropped} records with invalid {column} in {table_name}")
-
+    # Add date keys and defaults for sales
     if table_name == 'sales':
-        if 'payment_type' not in df.columns:
-            df['payment_type'] = 'Credit Card'
-        else:
-            df.loc[:, 'payment_type'] = df['payment_type'].fillna(
-                'Credit Card')
+        # Add date keys for any date columns
+        for col in df.columns:
+            if 'date' in col.lower() and not col.endswith('_key'):
+                try:
+                    date_series = pd.to_datetime(df[col], errors='coerce')
+                    df[f"{col}_key"] = date_series.dt.strftime(
+                        '%Y%m%d').astype('Int64')
+                    logger.info(f"Added {col}_key column for {table_name}")
+                except Exception as e:
+                    logger.warning(f"Failed to create date key for {col}: {e}")
 
-        if 'channel' not in df.columns:
-            df['channel'] = 'In-Store'
-        else:
-            df.loc[:, 'channel'] = df['channel'].fillna('In-Store')
+        # Add default values
+        for col, default in [('payment_type', 'Credit Card'), ('channel', 'InStore')]:
+            if col not in df.columns:
+                df[col] = default
 
+    # Remove duplicates and nulls
+    pk_columns = [col for col in df.columns if col.endswith('_id')]
+    if pk_columns:
+        primary_key = pk_columns[0]
+        initial_count = len(df)
+
+        # Remove nulls for dimension tables
+        if table_name in ['customers', 'products', 'stores', 'suppliers']:
+            df = df[df[primary_key].notna()]
+            null_removed = initial_count - len(df)
+            if null_removed > 0:
+                logger.info(
+                    f"Removed {null_removed} records with NULL {primary_key}")
+
+        # Remove duplicates
+        df = df.drop_duplicates(subset=[primary_key])
+        duplicates_removed = initial_count - len(df)
+        if duplicates_removed > 0:
+            logger.info(
+                f"Removed {duplicates_removed} duplicates from {table_name}")
+
+    logger.info(f"Transformed {table_name}: {len(df)} records")
     return df
 
 
-def create_promotion_dimension():
-    return pd.DataFrame()
-
-
-def transform_data():
-    logger.info(
-        "Starting incremental data transformation using metadata")
-
-    staging_db = get_staging_db_connector()
-    staging_db.connect()
+def transform_staging_data(staging_data):
+    """Transform dimension tables - basic transformations only"""
+    logger.info("Starting data transformation")
+    if not staging_data:
+        return {}
 
     try:
-        logger.info("Extracting table schema from staging database")
-        tables_config = extract_staging_tables_schema()
-        logger.info(
-            f"Found {len(tables_config)} staging tables: {list(tables_config.keys())}")
-
-        logger.info(
-            "Reading incremental data from staging tables using metadata")
         transformed_data = {}
+        for table_name, df in staging_data.items():
+            transformed_data[table_name] = clean_and_deduplicate(
+                df, table_name)
 
-        for table_name, schema_config in tables_config.items():
-            logger.info(f"Processing {table_name} data")
-
-            raw_df = extract_incremental_data(
-                staging_db, table_name, schema_config)
-            cleaned_df = clean_data_by_schema(
-                raw_df, table_name, schema_config)
-            transformed_data[table_name] = cleaned_df
-
-            logger.data_summary(table_name, len(cleaned_df), "transformed")
-
-        logger.info("Creating dimensions")
-        transformed_data['promotions'] = create_promotion_dimension()
-        logger.success("Promotion dimension created")
-
-        logger.success("Data transformation completed")
-        return {
-            'data': transformed_data,
-            'tables_config': tables_config
-        }
+        total_records = sum(len(df) for df in transformed_data.values())
+        logger.success(
+            f"Transformation completed: {total_records} records across {len(transformed_data)} tables")
+        return transformed_data
 
     except Exception as e:
-        logger.error(f"Transformation process failed: {str(e)}")
-        raise TransformationError(
-            f"Transformation process failed: {str(e)}", "TRF003")
-    finally:
-        staging_db.disconnect()
+        logger.error(f"Transformation failed: {e}")
+        raise TransformationError(f"Transformation failed: {e}")
 
 
-def run_transformation():
-    return transform_data()
+def transform_facts_after_dimensions(staging_data, db):
+    """Transform fact tables after dimensions are loaded - with dimension key mapping"""
+    logger.info("Starting fact transformations with dimension key mapping")
+
+    try:
+        fact_data = {}
+
+        # Transform facts with dimension keys
+        if 'sales' in staging_data:
+            sales_fact_df = transform_sales_fact(db, staging_data['sales'])
+            if not sales_fact_df.empty:
+                fact_data['sales_fact'] = sales_fact_df
+                logger.info(
+                    f"Sales fact transformation: {len(sales_fact_df)} records")
+
+        if 'inventory' in staging_data:
+            inventory_fact_df = transform_inventory_fact(
+                db, staging_data['inventory'])
+            if not inventory_fact_df.empty:
+                fact_data['inventory_fact'] = inventory_fact_df
+                logger.info(
+                    f"Inventory fact transformation: {len(inventory_fact_df)} records")
+
+        return fact_data
+
+    except Exception as e:
+        logger.error(f"Fact transformation failed: {e}")
+        raise TransformationError(f"Fact transformation failed: {e}")

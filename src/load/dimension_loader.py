@@ -7,13 +7,9 @@ logger = get_logger("DIMENSION_LOADER")
 
 
 def load_dimension_table(db, df, table_name, key_column, batch_size=1000):
-    if df is None:
-        logger.warning(f"No data to load for {table_name} (DataFrame is None)")
-        return True
-
-    if df.empty:
+    if df is None or df.empty:
         logger.warning(
-            f"No data to load for {table_name} (DataFrame is empty)")
+            f"No data to load for {table_name} (DataFrame is None or empty)")
         return True
 
     logger.info(f"Loading {len(df)} records into {table_name}")
@@ -24,73 +20,19 @@ def load_dimension_table(db, df, table_name, key_column, batch_size=1000):
         logger.error(f"Available columns: {list(df.columns)}")
         return False
 
-    # Apply incremental loading filter
-    df = apply_incremental_filter(db, df, table_name, key_column)
-
-    if df.empty:
-        logger.info(f"No new records to load for {table_name}")
-        return True
-
-    # Load in batches
     total_loaded = load_in_batches(db, df, table_name, batch_size)
 
     if total_loaded > 0:
         logger.data_summary(table_name, total_loaded, "loaded")
     else:
-        logger.info(f"No new records to load for {table_name}")
+        logger.info(f"No records loaded for {table_name}")
 
     return True
 
 
-def apply_incremental_filter(db, df, table_name, key_column):
-    # Validate inputs
-    valid_tables = ['dimcustomer', 'dimproduct', 'dimstore',
-                    'dimsupplier', 'dimdate', 'dimpromotion']
-    valid_key_columns = ['customer_id', 'product_id',
-                         'store_id', 'supplier_id', 'date_key', 'promotion_key']
-
-    if table_name not in valid_tables:
-        logger.error(f"Invalid table name: {table_name}")
-        return df
-
-    if key_column not in valid_key_columns:
-        logger.error(f"Invalid key column: {key_column}")
-        return df
-
-    try:
-        if key_column == 'date_key':
-            latest_query = f"SELECT MAX({key_column}) as latest_value FROM {table_name}"
-        else:
-            latest_query = f"SELECT {key_column} as latest_value FROM {table_name} ORDER BY {key_column} DESC LIMIT 1"
-
-        latest_result = db.run_query(latest_query)
-
-        if latest_result is not None and not latest_result.empty and latest_result['latest_value'].iloc[0] is not None:
-            latest_value = latest_result['latest_value'].iloc[0]
-            logger.debug(
-                f"Found latest {key_column} in {table_name}: {latest_value}")
-
-            if key_column == 'date_key':
-                filtered_df = df[df[key_column] > latest_value]
-            else:
-                filtered_df = df[df[key_column] > str(latest_value)]
-
-            logger.info(
-                f"Filtered {table_name} from {len(df)} to {len(filtered_df)} records (only new data)")
-            return filtered_df
-        else:
-            logger.info(
-                f"No existing data in {table_name}, loading all {len(df)} records")
-            return df
-
-    except Exception as e:
-        logger.warning(
-            f"Could not get latest value from {table_name}, loading all data: {e}")
-        return df
-
-
 def load_in_batches(db, df, table_name, batch_size):
     total_loaded = 0
+    duplicate_batches = 0
 
     for i in range(0, len(df), batch_size):
         batch = df.iloc[i:i+batch_size].copy()
@@ -110,11 +52,23 @@ def load_in_batches(db, df, table_name, batch_size):
             total_loaded += len(batch)
 
         except Exception as e:
-            logger.error(
-                f"Error inserting batch {i//batch_size + 1} into {table_name}: {e}")
-            batch_error_reason = f"Database insertion failed: {str(e)}"
+            # Clean error message without SQL parameter dump
+            if "Duplicate entry" in str(e):
+                duplicate_batches += 1
+                batch_error_reason = "Duplicate key constraint violation"
+            else:
+                error_type = type(e).__name__
+                logger.error(
+                    f"Batch {i//batch_size + 1} into {table_name}: {error_type}")
+                batch_error_reason = f"Database insertion failed: {error_type}"
+
             save_rejected_dimension_data(batch, table_name, batch_error_reason)
             continue
+
+    # Log summary instead of each duplicate batch
+    if duplicate_batches > 0:
+        logger.warning(
+            f"{table_name}: {duplicate_batches} batches skipped (duplicate keys - expected)")
 
     return total_loaded
 
@@ -150,14 +104,14 @@ def handle_promotions(db, transformed_data):
             return False
     else:
         # Check if default promotion exists
-        existing_promos = db.run_query(
+        existing_promos = db.query(
             "SELECT COUNT(*) as count FROM dimpromotion")
         if existing_promos is None or existing_promos['count'].iloc[0] == 0:
             default_promotion_sql = """
                 INSERT INTO dimpromotion (promotion_name, type, discount) 
                 VALUES ('No Promotion', 'None', 0.00)
             """
-            if not db.execute_query(default_promotion_sql):
+            if not db.query(default_promotion_sql, fetch_data=False):
                 logger.error("Failed to create default promotion")
                 return False
             logger.info("Created default promotion record")

@@ -31,12 +31,11 @@ def save_rejected_data(df, table_name, reason, additional_info=None):
 
         df_with_metadata.to_csv(filepath, index=False)
 
-        logger.warning(
-            f"Saved {len(df)} rejected {table_name} records to: {filepath}")
-        logger.warning(f"Rejection reason: {reason}")
-
-        if additional_info:
-            logger.warning(f"Additional info: {additional_info}")
+        # Only log once per batch/table, not for every duplicate error
+        if "Duplicate" not in reason:
+            logger.warning(
+                f"Saved {len(df)} rejected {table_name} records to: {filepath}")
+            logger.warning(f"Rejection reason: {reason}")
 
         return filepath
 

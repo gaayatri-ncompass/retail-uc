@@ -6,14 +6,14 @@ logger = get_logger("ANALYTICS")
 
 
 def run_sample_analytics():
-
+    """Run analytics using the simplified unified query method"""
     logger.info("Running sample analytics...")
 
     db = get_warehouse_db_connector()
     db.connect()
 
     try:
-
+        # Using the new unified query method - cleaner and more consistent
         top_products_query = """
             SELECT
                 p.product_name,
@@ -24,7 +24,7 @@ def run_sample_analytics():
             ORDER BY total_quantity_sold DESC
             LIMIT 5;
         """
-        top_products = db.run_query(top_products_query)
+        top_products = db.query(top_products_query)  # Simplified call
         if top_products is not None:
             logger.info("\nTop 5 Best-Selling Products:")
             logger.info(f"\n{top_products}")
@@ -39,7 +39,7 @@ def run_sample_analytics():
             GROUP BY d.year, d.month
             ORDER BY d.year, d.month;
         """
-        monthly_sales = db.run_query(monthly_sales_query)
+        monthly_sales = db.query(monthly_sales_query)  # Simplified call
         if monthly_sales is not None:
             logger.info("\nTotal Sales Amount per Month:")
             logger.info(f"\n{monthly_sales}")
@@ -58,7 +58,8 @@ def run_sample_analytics():
             GROUP BY age_bucket
             ORDER BY age_bucket;
         """
-        inventory_aging_report = db.run_query(inventory_aging_query)
+        inventory_aging_report = db.query(
+            inventory_aging_query)  # Simplified call
         if inventory_aging_report is not None:
             logger.info("\nInventory Aging Report:")
             logger.info(f"\n{inventory_aging_report}")
