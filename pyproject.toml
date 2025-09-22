@@ -1,0 +1,27 @@
+[project]
+name = "erp-crm-uc"
+version = "0.1.0"
+requires-python = ">=3.9,<3.14"
+dependencies = [
+    "dagster==1.11.10",
+    "duckdb>=1.4.0",
+    "mysql-connector-python>=9.4.0",
+    "pandas>=2.3.2",
+]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.dagster]
+module_name = "definitions"  # since definitions.py is at the root
+working_directory = "."      # root of your project
+
+[tool.hatch.build.targets.wheel]
+force-include = { "pyproject.toml" = "pyproject.toml" }
